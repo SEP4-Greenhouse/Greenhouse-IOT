@@ -1,0 +1,79 @@
+Always show details
+
+Copy
+from pathlib import Path
+
+# Define the instructions content
+instructions_text = """
+MQTT + Backend Reset and Run Instructions (SEP 4 Project)
+----------------------------------------------------------
+
+Full Clean Reset and Setup
+
+1. Remove Existing Containers
+------------------------------
+Open PowerShell or terminal and run:
+
+docker stop mqtt-broker
+docker stop <backend-container-name>  # If backend container is running
+
+# Remove containers
+docker rm mqtt-broker
+docker rm <backend-container-name>
+
+(Optional) Check all containers:
+docker ps -a
+
+Make sure no running Mosquitto or Backend containers.
+
+2. Confirm mosquitto.conf Exists
+---------------------------------
+Inside your project folder:
+
+SEP 4 Repo/mosquitto_config/mosquitto.conf
+
+File mosquitto.conf should contain exactly:
+listener 1883
+allow_anonymous true
+
+(No .txt extension. It's a plain text file.)
+
+3. Start Mosquitto Broker Fresh
+-------------------------------
+Run this command to start Mosquitto with the config:
+
+docker run -it --name mqtt-broker -p 1883:1883 -p 9001:9001 -v "C:\\Users\\artur\\Desktop\\VIA\\SEP_4X\\Sep 4 Repo\\mosquitto_config:/mosquitto/config" eclipse-mosquitto
+
+Expected output:
+- Mosquitto starts
+- No "local-only mode" warning
+- Listening on port 1883
+
+4. Build and Run Backend
+-------------------------
+Navigate to backend folder:
+
+cd "C:\\Users\\artur\\Desktop\\VIA\\SEP_4X\\Sep 4 Repo\\lib\\backend"
+
+Build backend Docker image:
+
+docker build -t greenhouse-backend .
+
+Run backend container:
+
+docker run --network="host" greenhouse-backend
+
+Expected backend output:
+- Connected to MQTT broker
+- Subscribed to topic greenhouse/sensor/temp
+
+5. Publish a Test Message
+---------------------------
+In a new terminal, run:
+
+docker run -it --network="host" eclipse-mosquitto mosquitto_pub -h localhost -t "greenhouse/sensor/temp" -m "24.5"
+
+Expected result:
+- Backend terminal prints:
+
+📥 New Message - Topic: greenhouse/sensor/temp | Message: 24.5
