@@ -1,79 +1,64 @@
-Always show details
+✅ ✅1. (IoT side) Start the Mosquitto Broker (Option A: Local Mosquitto)
 
-Copy
-from pathlib import Path
+Open Terminal #1 (for Broker Locally):
 
-# Define the instructions content
-instructions_text = """
-MQTT + Backend Reset and Run Instructions (SEP 4 Project)
-----------------------------------------------------------
+cd "C:\Program Files\mosquitto"
+.\mosquitto.exe -v
 
-Full Clean Reset and Setup
+✅Expected Result:
 
-1. Remove Existing Containers
-------------------------------
-Open PowerShell or terminal and run:
+Starting in local only mode...
 
-docker stop mqtt-broker
-docker stop <backend-container-name>  # If backend container is running
+Opening ipv4 listen socket on port 1883...
 
-# Remove containers
-docker rm mqtt-broker
-docker rm <backend-container-name>
+✅ OR 1. (IoT side) Start the Mosquitto Broker (Option B: Docker Container)
 
-(Optional) Check all containers:
-docker ps -a
+Open Terminal #1 (for Broker via Docker):
 
-Make sure no running Mosquitto or Backend containers.
+docker run -it --rm -p 1883:1883 -p 9001:9001 -v "C:\Users\artur\Desktop\VIA\SEP_4X\Sep 4 Repo\mosquitto_config\mosquitto.conf:/mosquitto/config/mosquitto.conf" eclipse-mosquitto
 
-2. Confirm mosquitto.conf Exists
----------------------------------
-Inside your project folder:
+✅Expected Result:
 
-SEP 4 Repo/mosquitto_config/mosquitto.conf
+Broker starts with your custom configuration
 
-File mosquitto.conf should contain exactly:
-listener 1883
-allow_anonymous true
+Listening on port 1883 (MQTT) and optionally 9001 (WebSocket)
 
-(No .txt extension. It's a plain text file.)
+✅ 2. (Backend side) Start your Backend API (Subscriber)
 
-3. Start Mosquitto Broker Fresh
--------------------------------
-Run this command to start Mosquitto with the config:
+Open Terminal #2 (for Backend):
 
-docker run -it --name mqtt-broker -p 1883:1883 -p 9001:9001 -v "C:\\Users\\artur\\Desktop\\VIA\\SEP_4X\\Sep 4 Repo\\mosquitto_config:/mosquitto/config" eclipse-mosquitto
+cd "C:\Users\artur\Desktop\VIA\SEP_4X\Sep 4 Backend Repo\Greenhouse-Backend\GreenhouseApi"
+dotnet run
 
-Expected output:
-- Mosquitto starts
-- No "local-only mode" warning
-- Listening on port 1883
+✅Expected Result:
 
-4. Build and Run Backend
--------------------------
-Navigate to backend folder:
+Swagger UI startup
 
-cd "C:\\Users\\artur\\Desktop\\VIA\\SEP_4X\\Sep 4 Repo\\lib\\backend"
+Backend connects to MQTT broker
 
-Build backend Docker image:
+Backend subscribes to topic greenhouse/sensor/temp
 
-docker build -t greenhouse-backend .
+Log: "\u2705 Connected to MQTT broker."
 
-Run backend container:
+✅3. (IoT side) Publish a Test Message
 
-docker run --network="host" greenhouse-backend
+Open Terminal #3 (for Publisher):
 
-Expected backend output:
-- Connected to MQTT broker
-- Subscribed to topic greenhouse/sensor/temp
+cd "C:\Program Files\mosquitto"
+.\mosquitto_pub.exe -h localhost -t "greenhouse/sensor/temp" -m "Hello Backend from IoT!"
 
-5. Publish a Test Message
----------------------------
-In a new terminal, run:
+✅Expected Result:
 
-docker run -it --network="host" eclipse-mosquitto mosquitto_pub -h localhost -t "greenhouse/sensor/temp" -m "24.5"
+Message is published
 
-Expected result:
-- Backend terminal prints:
+Backend (Terminal #2) logs:
 
-📥 New Message - Topic: greenhouse/sensor/temp | Message: 24.5
+\ud83d\udce5 Received message - Topic: greenhouse/sensor/temp | Message: Hello Backend from IoT!
+
+Important Notes:
+
+Terminal 1 must stay running (Broker active)
+
+Terminal 2 must start after Broker is running
+
+Terminal 3 can send messages after Backend is subscribed

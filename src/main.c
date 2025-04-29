@@ -44,7 +44,7 @@ int main()
     uart_send_string_blocking(USART_0, "Wi-Fi Connected\n");
 
     // Step 2: Connect to MQTT Broker
-    wifi_command_create_TCP_connection("broker.hivemq.com", 1883, NULL, NULL);
+    wifi_command_create_TCP_connection("broker.hivemq.com", 1883, NULL, NULL); // This link needs to be changed to connect with Backend
     uart_send_string_blocking(USART_0, "TCP Connected\n");
 
     // Step 3: Send MQTT CONNECT packet
