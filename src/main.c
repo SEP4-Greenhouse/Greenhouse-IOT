@@ -5,7 +5,10 @@
 #include <string.h>
 #include <stdbool.h>
 #include <avr/interrupt.h>
-#include "mqtt_client.h" // need to implement or import a library
+#include "servo.h"        // Correct: servo driver
+#include "leds.h"         // Correct: leds driver
+#include "display.h"      // Correct: 7segment display driver
+#include "waterpump.h"   // Correct: water pump driver
 
 static uint8_t _buff[100];
 static uint8_t _index = 0;
@@ -43,9 +46,14 @@ int main()
     wifi_command_join_AP("JESUS CHRIST", "Nya199200");
     uart_send_string_blocking(USART_0, "Wi-Fi Connected\n");
 
-    // Step 2: Connect to MQTT Broker
-    wifi_command_create_TCP_connection("broker.hivemq.com", 1883, NULL, NULL); // This link needs to be changed to connect with Backend
-    uart_send_string_blocking(USART_0, "TCP Connected\n");
+    // Step 2: Connect to TCP or MQTT Broker
+    // Connect to both if needed, or conditionally based on use case
+    wifi_command_create_TCP_connection("broker.hivemq.com", 1883, NULL, NULL); // MQTT Broker
+    uart_send_string_blocking(USART_0, "TCP Connected to MQTT Broker\n");
+
+    // Optionally connect to frontend backend server (for UI commands)
+    // wifi_command_create_TCP_connection("172.20.10.3", 23, NULL, NULL);
+    // uart_send_string_blocking(USART_0, "TCP Connected to Frontend Backend\n");
 
     // Step 3: Send MQTT CONNECT packet
     mqtt_connect("greenhouse_device_01");
@@ -53,17 +61,69 @@ int main()
 
     uart_send_string_blocking(USART_0, prompt_text);
 
-    // Step 4: Loop for publishing
+    // Initialize hardware peripherals
+    leds_init();
+    display_init();
+    waterpump_init();
+
+    // Step 4: Loop
     while (1)
     {
         if (_done)
         {
+            // MQTT Publish simulated sensor data (for example purposes)
             mqtt_publish("greenhouse/sensor/temp", (char*)_buff);
             uart_send_string_blocking(USART_0, "MQTT PUBLISH Sent\n");
+
+            // Handle frontend commands
+            if (strcmp((char*)_buff, "BUTTON1") == 0)
+            {
+                uart_send_string_blocking(USART_0, "Button 1 triggered from Frontend!\n");
+                servo(0);
+                leds_turnOn(1);
+                display_int(1);
+            }
+            else if (strcmp((char*)_buff, "BUTTON2") == 0)
+            {
+                uart_send_string_blocking(USART_0, "Button 2 triggered from Frontend!\n");
+                servo(90);
+                leds_turnOn(2);
+                display_int(2);
+            }
+            else if (strcmp((char*)_buff, "BUTTON3") == 0)
+            {
+                uart_send_string_blocking(USART_0, "Button 3 triggered from Frontend!\n");
+                servo(180);
+                leds_turnOn(3);
+                display_int(3);
+            }
+            else if (strcmp((char*)_buff, "LED4_ON") == 0)
+            {
+                leds_turnOn(4);
+            }
+            else if (strcmp((char*)_buff, "LED4_OFF") == 0)
+            {
+                leds_turnOff(4);
+            }
+            else if (strcmp((char*)_buff, "PUMP_ON") == 0)
+            {
+                waterpump_start();
+            }
+            else if (strcmp((char*)_buff, "PUMP_OFF") == 0)
+            {
+                waterpump_stop();
+            }
+            else
+            {
+                // Unknown command; send it via TCP
+                wifi_command_TCP_transmit(_buff, strlen((char*)_buff));
+            }
+
             _done = false;
             uart_send_string_blocking(USART_0, prompt_text);
         }
     }
 
     return 0;
+
 }
