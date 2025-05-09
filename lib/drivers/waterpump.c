@@ -1,23 +1,22 @@
+#include <stdint.h>
 #include "waterpump.h"
-#include "includes.h"  // Assuming this includes F_CPU and IO definitions
 
-// Define the control pin
-#define PUMP_PORT PORTL
-#define PUMP_DDR  DDRL
-#define PUMP_PIN  PL6
+uint8_t PORTL = 0;
+uint8_t DDRL = 0;
+#define PL6 6
 
 void waterpump_init(void)
 {
-    PUMP_DDR |= (1 << PUMP_PIN); // Set pump pin as output
-    PUMP_PORT &= ~(1 << PUMP_PIN); // Make sure pump is off initially
+    DDRL |= (1 << PL6);
+    PORTL &= ~(1 << PL6);
 }
 
 void waterpump_start(void)
 {
-    PUMP_PORT |= (1 << PUMP_PIN); // Turn pump ON
+    PORTL |= (1 << PL6);
 }
 
 void waterpump_stop(void)
 {
-    PUMP_PORT &= ~(1 << PUMP_PIN); // Turn pump OFF
+    PORTL &= ~(1 << PL6);
 }

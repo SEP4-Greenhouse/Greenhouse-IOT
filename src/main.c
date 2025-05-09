@@ -1,14 +1,18 @@
 #include "wifi.h"
 #include "uart.h"
-#include <util/delay.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <avr/interrupt.h>
 #include "servo.h"        // Correct: servo driver
 #include "leds.h"         // Correct: leds driver
 #include "display.h"      // Correct: 7segment display driver
 #include "waterpump.h"   // Correct: water pump driver
+#include "mqtt_client.h"
+
+#ifdef __AVR__
+#include <util/delay.h>
+#include <avr/interrupt.h>
+#endif
 
 static uint8_t _buff[100];
 static uint8_t _index = 0;
@@ -29,21 +33,26 @@ void console_rx(uint8_t _rx)
         _index = 0;
         _done = true;
         uart_send_blocking(USART_0, '\n');
-//        uart_send_string_blocking(USART_0, (char*)_buff);
+        uart_send_string_blocking(USART_0, (char*)_buff);
     }
 }
 
 int main()
 {
     char welcome_text[] = "Welcome from SEP4 IoT hardware!\n";
+ //   char hardware_msg[] = "Initialized hardware peripherals!\n";
     char prompt_text[] = "Type text to send: ";
+
 
     uart_init(USART_0, 9600, console_rx);
     wifi_init();
+
+    #ifdef __AVR__
     sei();
+    #endif
 
     // Step 1: Connect to Wi-Fi
-    wifi_command_join_AP("JESUS CHRIST", "Nya199200");
+    wifi_command_join_AP("ONEPLUS", "00000000");
     uart_send_string_blocking(USART_0, "Wi-Fi Connected\n");
 
     // Step 2: Connect to TCP or MQTT Broker
@@ -52,20 +61,23 @@ int main()
     uart_send_string_blocking(USART_0, "TCP Connected to MQTT Broker\n");
 
     // Optionally connect to frontend backend server (for UI commands)
-    // wifi_command_create_TCP_connection("172.20.10.3", 23, NULL, NULL);
-    // uart_send_string_blocking(USART_0, "TCP Connected to Frontend Backend\n");
+     wifi_command_create_TCP_connection("172.20.80.1", 23, NULL, NULL);
+     uart_send_string_blocking(USART_0, "TCP Connected to Frontend Backend\n");
 
     // Step 3: Send MQTT CONNECT packet
     mqtt_connect("greenhouse_device_01");
     uart_send_string_blocking(USART_0, "MQTT CONNECT Sent\n");
 
+   // uart_send_string_blocking(USART_0, hardware_msg);
     uart_send_string_blocking(USART_0, prompt_text);
 
     // Initialize hardware peripherals
     leds_init();
     display_init();
     waterpump_init();
+    //uart_send_string_blocking(USART_0, hardware_msg);
 
+    
     // Step 4: Loop
     while (1)
     {
@@ -125,5 +137,4 @@ int main()
     }
 
     return 0;
-
 }

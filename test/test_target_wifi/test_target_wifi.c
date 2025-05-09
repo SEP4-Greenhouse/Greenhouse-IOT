@@ -11,6 +11,11 @@
 #include <string.h>
 #include <stdio.h>
 
+#ifdef WINDOWS_TEST
+int light_read() {
+    return 123;  // fake value for testing
+}
+#endif
 
 void setUp(void)
 {
