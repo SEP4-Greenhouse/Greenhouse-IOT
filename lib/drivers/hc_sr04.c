@@ -1,105 +1,91 @@
+/**
+ * @file hc_sr04.c
+ * @brief Ultrasonic proximity sensor driver (HC-SR04) for ATmega2560
+ *
+ * Measures distance using an HC-SR04 sensor connected to:
+ *  - Trigger: PL7 (digital output)
+ *  - Echo: PL6 (digital input, pulse width measurement)
+ */
+
 #include "includes.h"
+#include <util/delay.h>
+#include <avr/interrupt.h>  // For cli()/sei()
 
-#include <inttypes.h>
+// === Pin Configuration ===
+#define TRIGGER_DDR     DDRL
+#define TRIGGER_PORT    PORTL
+#define TRIGGER_PIN     PL7
 
-//Vcc
-//#define DDR_Vcc DDRC
-//#define PORT_Vcc PORTC
-//#define P_Vcc PC0
+#define ECHO_DDR        DDRL
+#define ECHO_PIN_REG    PINL
+#define ECHO_PIN        PL6
 
-//GND
-#define DDR_Gnd DDRC //DDRK
-#define P_Gnd PC6 //PK7
+// === Timing Constants ===
+#define TIMER_PRESCALER         256
+#define MAX_WAIT_START_US       100000UL  // 100ms
+#define MAX_WAIT_ECHO_US        24000UL   // 24ms (max distance: ~4 meters)
+#define SOUND_SPEED_DIVISOR     125UL     // (F_CPU * PRESCALER / 2 / 34300)
 
-//Trigger   42=PL7
-#define DDR_Trig DDRL
-#define P_Trig PL7//PC2
-#define PORT_trig PORTL
+// === Initialization Function ===
+void hc_sr04_init(void) {
+    // Set Trigger as output
+    TRIGGER_DDR |= (1 << TRIGGER_PIN);
+    TRIGGER_PORT &= ~(1 << TRIGGER_PIN);  // Ensure low
 
-//Echo  43=PL6
-#define PIN_Echo PINL
-#define P_Echo PL6//PC4
-
-
-
-void hc_sr04_init()
-{
-    //Vcc
-    //DDR_Vcc|=(1 << P_Vcc);
-    //PORT_Vcc|=(1 << P_Vcc);
-
-    //GND
-    //DDR_Gnd|=(1 << P_Gnd);
-
-    //Trigger
-    DDR_Trig|=(1 << P_Trig);
+    // Set Echo as input
+    ECHO_DDR &= ~(1 << ECHO_PIN);
 }
 
-uint16_t hc_sr04_takeMeasurement()
-{
-    uint16_t cnt = 0;
+/**
+ * @brief Measure distance using HC-SR04 sensor.
+ *
+ * @return Distance in centimeters. Returns 0 on timeout or failure.
+ */
+uint16_t hc_sr04_takeMeasurement(void) {
+    uint16_t count = 0;
 
+    // Send 10us trigger pulse
+    TRIGGER_PORT &= ~(1 << TRIGGER_PIN);
+    _delay_us(2);
+    TRIGGER_PORT |= (1 << TRIGGER_PIN);
     _delay_us(10);
-    PORT_trig |= (1 << P_Trig); // trig is set to high for 10 us to start measurement.
-    _delay_us(10);
-    PORT_trig &= ~(1 << P_Trig);
+    TRIGGER_PORT &= ~(1 << TRIGGER_PIN);
 
+    // Backup current Timer1 config
+    uint8_t saved_TCCR1B = TCCR1B;
 
-    
-    uint8_t TCCR1B_state = TCCR1B; // The display is using timer1. But Ill just borrow it briefly. But therefor the state of TCCR1B needs to be saved.
+    // Disable interrupts during timing (optional but recommended for accuracy)
+    cli();
 
-    // Set the Timer/Counter1 prescaler to 256
-     TCCR1B = (1 << CS12);
-//    TCCR1B |= (1 << CS12);
-//    TCCR1B &= ~(1 << CS11);
-//    TCCR1B &= ~(1 << CS10);
-   
-TCNT1 = 0;
-    while (!(PIN_Echo & (1 << P_Echo)))
-    {
+    // Configure Timer1: Normal mode, prescaler 256
+    TCCR1B = (1 << CS12);
+    TCNT1 = 0;
 
-                // Check for timer overflow (24 ms)
-        if (TCNT1 >= (F_CPU / 256) * 0.1) //timeout after 100ms. Chip is not working
-        {
-            // Timer overflowed, return 0
-            return 0;
+    // Wait for echo pin to go HIGH
+    while (!(ECHO_PIN_REG & (1 << ECHO_PIN))) {
+        if (TCNT1 >= (F_CPU / TIMER_PRESCALER) * (MAX_WAIT_START_US / 1000000.0)) {
+            TCCR1B = saved_TCCR1B;
+            sei();
+            return 0;  // Timeout waiting for echo start
         }
     }
-         // Wait for signal to begin /TODO implement some timeout...
 
-
-    TCNT1 = 0; // Setting the timer to Zero. This is  messing up the display, but hopefully the reader of the display wont notice.
-
-    while (PIN_Echo & (1 << P_Echo))
-    {
-        // Check for timer overflow (24 ms)
-        if (TCNT1 >= (F_CPU / 256) * 0.024)
-        {
-            // Timer overflowed, return 0
-            break;
+    // Start timing pulse width
+    TCNT1 = 0;
+    while (ECHO_PIN_REG & (1 << ECHO_PIN)) {
+        if (TCNT1 >= (F_CPU / TIMER_PRESCALER) * (MAX_WAIT_ECHO_US / 1000000.0)) {
+            TCCR1B = saved_TCCR1B;
+            sei();
+            return 0;  // Timeout during echo HIGH
         }
     }
-    cnt = TCNT1; // Save the value of the timer!
 
-    TCCR1B = TCCR1B_state; // thx Display, for letting me borrow timer1
+    count = TCNT1;
 
-    /*
-    So a bit of math is goint into the following calculation
-    The amount of clock cycles to that it took is the prescaler times the counter
-    cnt*256
-    To get the time, it should be devided with the clock frequency which is 16000000Hz
-    cnt*256/16000000
-    This is the time it takes for the ultrasound signal to travel to the target and back. '
-    To get the time to the target, this time should be divided by 2
-    time to target = cnt*256/16000000/2
-    To get the distance we should multiply with the speed of sound. This is 343m/s or 34300cm/s
-    Distance = cnt*256/16000000/2 * 34300
-    To encure that we keep the calculation in a nice uint16 range (no floating point in target), the
-    constant that cnt should me multipliued with is calculated: 256/16000000/2 * 343000 = 2.744. This
-    value is not good, as it is a floating point. Another way of writing 2.755 is 343/125. This is better,
-    as it is integers. In the calculation we make it UL (unsigned Long, 64bit)  to make sure that 343 times cnt
-    does not overfloat before its devided by 125
-    */
-    cnt = cnt * 343UL / 125UL;
-    return cnt;
+    // Restore previous Timer1 config and re-enable interrupts
+    TCCR1B = saved_TCCR1B;
+    sei();
+
+    // Calculate and return distance (in cm)
+    return (uint16_t)((count * 343UL) / SOUND_SPEED_DIVISOR);
 }

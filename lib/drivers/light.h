@@ -1,31 +1,18 @@
-/**
- * @file light.h
- * @brief Photoresistor driver for ATmega2560
- *
- * This file provides the API for initializing and reading the value from a photoresistor
- * connected to pin PK1 (ADC9) on the ATmega2560.
- *
- * @author Your Name
- * @date September 2023
- */
-
-#pragma once
+#ifndef LIGHT_H
+#define LIGHT_H
 
 #include <stdint.h>
 
 /**
- * @brief Initialize ADC for photoresistor
- *
- * This function initializes the ADC to read values from the photoresistor connected to pin PK1 (ADC9).
+ * @brief Initializes the ADC hardware for the photoresistor.
  */
 void light_init(void);
 
 /**
- * @brief Read value from photoresistor
+ * @brief Reads the current light level from the photoresistor.
  *
- * This function reads the ADC value from the photoresistor connected to pin PK1 (ADC9).
- *
- * @return 10-bit ADC value read from the photoresistor
+ * @return 10-bit ADC value (0–1023). Returns 0 on timeout.
  */
 uint16_t light_read(void);
 
+#endif // LIGHT_H
