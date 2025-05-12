@@ -1,4 +1,5 @@
 
+#ifdef __AVR__
 #include "unity.h"
 
 #include <util/delay.h>
@@ -13,6 +14,7 @@
 #include "light.h"
 #include "pir.h"
 #include "tone.h"
+#endif
 
 void setUp(void)
 {
