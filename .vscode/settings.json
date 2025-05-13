@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "interrupt.h": "c",
+        "io.h": "c",
         "mqtt_client.h": "c",
         "delay.h": "c",
         "includes.h": "c",

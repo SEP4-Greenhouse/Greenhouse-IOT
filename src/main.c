@@ -167,9 +167,18 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 
+#define MAX_STRING_LENGTH 100
+
 static uint8_t _buff[100];
 static uint8_t _index = 0;
 volatile static bool _done = false;
+
+static uint8_t _console_receive_buff[MAX_STRING_LENGTH] = {0};
+static bool _console_string_received = false;
+static char _tcp_receive_buff[MAX_STRING_LENGTH] = {0};
+static bool _tcp_string_received = false;
+
+// This is a callback function. Execution time must be short!
 
 // Helper to trim CR/LF
 void strip_newline(char* str) {
@@ -264,6 +273,42 @@ void handle_command(char* cmd)
     }
 }
 
+// This is a callback function. Execution time must be short!
+void console_rx(uint8_t _rx)
+{
+    uart_send_blocking(USART_0, _rx);
+    uart_send_blocking(USART_0, _rx);   // Echo (for demo purposes)
+    if(('\r' != _rx) && ('\n' != _rx))
+    {
+        if(_index < 100-1)
+        {
+            _buff[_index++] = _rx;
+            _console_receive_buff[_index++] = _rx;
+        }
+    }
+    else
+    {
+        _buff[_index] = '\0';
+        _console_receive_buff[_index] = '\0';
+        _index = 0;
+        _done = true;
+        uart_send_blocking(USART_0, '\n');
+//        uart_send_string_blocking(USART_0, (char*)_buff);
+        _console_string_received = true;
+        uart_send_blocking(USART_0, '\n');   // Echo (for demo purposes)
+    }
+}
+
+// This is a callback function. Execution time must be short!
+void tcp_rx()
+{
+    uint8_t index = strlen(_tcp_receive_buff);
+    _tcp_receive_buff[index] = '\r';
+    _tcp_receive_buff[index+1] = '\n';
+    _tcp_receive_buff[index+2] = '\0';
+    _tcp_string_received = true;
+}
+
 int main()
 {
     char welcome_text[] = "Welcome from SEP4 IoT hardware!\n";
@@ -277,7 +322,7 @@ int main()
     wifi_command_join_AP("ONEPLUS", "00000000");
     uart_send_string_blocking(USART_0, "Wi-Fi Connected\n");
 
-    wifi_command_create_TCP_connection("192.168.219.114", 5000, NULL, NULL);
+    wifi_command_create_TCP_connection("192.168.219.114", 5000, tcp_rx, _tcp_receive_buff);
     uart_send_string_blocking(USART_0, "TCP Connected to Frontend Backend\n");
 
     mqtt_connect("greenhouse_device_01");
@@ -296,6 +341,7 @@ int main()
     {
         if (_done)
         {
+        
             mqtt_publish("greenhouse/sensor/temp", (char *)_buff);
             uart_send_string_blocking(USART_0, "MQTT PUBLISH Sent\n");
 
@@ -305,6 +351,14 @@ int main()
             _done = false;
             uart_send_string_blocking(USART_0, prompt_text);
         }
+        
+        if (_tcp_string_received)
+        {
+            uart_send_string_blocking(USART_0, "TCP Received: ");
+            uart_send_string_blocking(USART_0, _tcp_receive_buff);
+            handle_command(_tcp_receive_buff);  // Optional: Treat it as a command
+            _tcp_string_received = false;
+        }
 
         if (++counter >= 5000)
         {
@@ -313,7 +367,12 @@ int main()
             char temp_str[32];
             sprintf(temp_str, "TEMP: %d.%d\n", temp / 10, temp % 10);
             uart_send_string_blocking(USART_0, temp_str);
+
+            uart_send_string_blocking(USART_0, _tcp_receive_buff);
+            _tcp_string_received = false; // new
+
             wifi_command_TCP_transmit((uint8_t*)temp_str, strlen(temp_str));
+
         }
 
         _delay_ms(1);
