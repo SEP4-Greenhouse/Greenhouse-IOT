@@ -190,25 +190,40 @@ void strip_newline(char* str) {
     }
 }
 
-// UART receive interrupt callback
+// This is a callback function. Execution time must be short!
 void console_rx(uint8_t _rx)
 {
     uart_send_blocking(USART_0, _rx);
-
-    if (_rx != '\r' && _rx != '\n') {
-        if (_index < sizeof(_buff) - 1) {
+    uart_send_blocking(USART_0, _rx);   // Echo (for demo purposes)
+    if(('\r' != _rx) && ('\n' != _rx))
+    {
+        if(_index < 100-1)
+        {
             _buff[_index++] = _rx;
+            _console_receive_buff[_index++] = _rx;
         }
-    } else {
+    }
+    else
+    {
         _buff[_index] = '\0';
+        _console_receive_buff[_index] = '\0';
         _index = 0;
         _done = true;
-
         uart_send_blocking(USART_0, '\n');
-        uart_send_string_blocking(USART_0, "Received: ");
-        uart_send_string_blocking(USART_0, (char *)_buff);
-        uart_send_blocking(USART_0, '\n');
+//        uart_send_string_blocking(USART_0, (char*)_buff);
+        _console_string_received = true;
+        uart_send_blocking(USART_0, '\n');   // Echo (for demo purposes)
     }
+}
+
+// This is a callback function. Execution time must be short!
+void tcp_rx()
+{
+    uint8_t index = strlen(_tcp_receive_buff);
+    _tcp_receive_buff[index] = '\r';
+    _tcp_receive_buff[index+1] = '\n';
+    _tcp_receive_buff[index+2] = '\0';
+    _tcp_string_received = true;
 }
 
 void handle_command(char* cmd)
@@ -273,41 +288,6 @@ void handle_command(char* cmd)
     }
 }
 
-// This is a callback function. Execution time must be short!
-void console_rx(uint8_t _rx)
-{
-    uart_send_blocking(USART_0, _rx);
-    uart_send_blocking(USART_0, _rx);   // Echo (for demo purposes)
-    if(('\r' != _rx) && ('\n' != _rx))
-    {
-        if(_index < 100-1)
-        {
-            _buff[_index++] = _rx;
-            _console_receive_buff[_index++] = _rx;
-        }
-    }
-    else
-    {
-        _buff[_index] = '\0';
-        _console_receive_buff[_index] = '\0';
-        _index = 0;
-        _done = true;
-        uart_send_blocking(USART_0, '\n');
-//        uart_send_string_blocking(USART_0, (char*)_buff);
-        _console_string_received = true;
-        uart_send_blocking(USART_0, '\n');   // Echo (for demo purposes)
-    }
-}
-
-// This is a callback function. Execution time must be short!
-void tcp_rx()
-{
-    uint8_t index = strlen(_tcp_receive_buff);
-    _tcp_receive_buff[index] = '\r';
-    _tcp_receive_buff[index+1] = '\n';
-    _tcp_receive_buff[index+2] = '\0';
-    _tcp_string_received = true;
-}
 
 int main()
 {
