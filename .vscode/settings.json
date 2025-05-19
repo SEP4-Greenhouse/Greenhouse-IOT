@@ -1,5 +1,7 @@
 {
     "files.associations": {
-        "interrupt.h": "c"
+        "interrupt.h": "c",
+        "io.h": "c",
+        "waterpump_controller.h": "c"
     }
 }
