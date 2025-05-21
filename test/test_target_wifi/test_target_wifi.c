@@ -3,14 +3,20 @@
 #define WIFI_PASSWORD "2409V#2021a!"
 #define TCP_SERVER "192.168.56.1" // should be running and in echo mode for the test to pass. 
 #define TCP_PORT 23
-
+#ifdef __AVR__
 #include "unity.h"
 #include "wifi.h"
 #include <util/delay.h>
 #include <avr/io.h>
 #include <string.h>
 #include <stdio.h>
+#endif
 
+#ifdef WINDOWS_TEST
+int light_read() {
+    return 123;  // fake value for testing
+}
+#endif
 
 void setUp(void)
 {

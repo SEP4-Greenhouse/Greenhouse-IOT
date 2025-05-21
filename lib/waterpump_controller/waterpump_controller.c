@@ -1,9 +1,30 @@
 #include "waterpump_controller.h"
 #include "waterpump.h"
-#include "soil.h"  // Assumes there's a soil moisture sensor driver
 
-void pump_controller_update(void) {
-    if (soil_is_dry() && !pump_is_running()) {
-        pump_run(3000); // Run pump for 3 seconds
-    }
+#ifdef __AVR__
+#include <util/delay.h>
+#endif
+
+void control_waterpump_init(void)
+{
+    waterpump_init();
+}
+
+void control_waterpump_on(void)
+{
+    waterpump_start();
+}
+
+void control_waterpump_off(void)
+{
+    waterpump_stop();
+}
+
+void control_waterpump_run_5s(void)
+{
+    waterpump_start();
+#ifdef __AVR__
+    _delay_ms(5000);
+#endif
+    waterpump_stop();
 }

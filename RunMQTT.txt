@@ -1,0 +1,63 @@
+✅ ✅1. (IoT side) Start the Mosquitto Broker (Option A: Local Mosquitto)
+
+Open Terminal #1 (for Broker Locally):
+
+cd "C:\Program Files\mosquitto"
+.\mosquitto.exe -v
+
+✅Expected Result:
+
+Starting in local only mode...
+
+Opening ipv4 listen socket on port 1883...
+
+✅ OR 1. (IoT side) Start the Mosquitto Broker (Option B: Docker Container)
+
+Open Terminal #1 (for Broker via Docker):
+
+docker run -it --rm `
+-p 1883:1883 `
+-p 9001:9001 `
+-v "C:\Users\artur\Desktop\VIA\SEP_4X\Sep 4 Repo\mosquitto_config\mosquitto.conf:/mosquitto/config/mosquitto.conf" `
+eclipse-mosquitto
+
+✅Expected Result:
+
+Broker starts with your custom configuration
+Listening on port 1883 (MQTT) and optionally 9001 (WebSocket)
+
+✅ 2. (Backend side) Start your Backend API (Subscriber)
+
+Open Terminal #2 (for Backend):
+
+cd "C:\Users\artur\Desktop\VIA\SEP_4X\Sep 4 Backend Repo\Greenhouse-Backend\GreenhouseApi"
+dotnet run
+
+✅Expected Result:
+
+✅ Connected to MQTT broker.
+📡 Subscribed to topic: greenhouse/sensors
+
+✅3. (IoT side) Publish a Test Message
+
+Open Terminal #3 (for Publisher):
+
+cd "C:\Program Files\mosquitto"
+.\mosquitto_pub.exe -h localhost -t "greenhouse/sensors" -m '{"sensorType":"Temperature","value":23.5,"timestamp":"2024-05-02T15:00:00"}'
+
+✅Expected Result:
+
+Message is published
+
+Backend (Terminal #2) logs:
+
+📥 Received message - Topic: greenhouse/sensors | Message: {"sensorType":"Temperature","value":23.5,"timestamp":"2024-05-02T15:00:00"}
+✅ Sensor reading saved to database.
+
+Important Notes:
+
+Terminal 1 must stay running (Broker active)
+
+Terminal 2 must start after Broker is running
+
+Terminal 3 can send messages after Backend is subscribed
