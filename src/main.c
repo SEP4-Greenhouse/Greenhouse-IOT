@@ -299,12 +299,16 @@ int main()
     sei();
 
     uart_send_string_blocking(USART_0, welcome_text);
+
+    // WIFI name and password
     wifi_command_join_AP("ONEPLUS", "00000000");
     uart_send_string_blocking(USART_0, "Wi-Fi Connected\n");
 
+    // IP of the WIFI source and callback
     wifi_command_create_TCP_connection("192.168.6.209", 5000, tcp_rx, _tcp_receive_buff);
     uart_send_string_blocking(USART_0, "TCP Connected to Frontend Backend\n");
 
+    //MQTT connection request
     mqtt_connect("greenhouse_device_01");
     uart_send_string_blocking(USART_0, "MQTT CONNECT Sent\n");
 
