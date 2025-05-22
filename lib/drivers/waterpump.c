@@ -22,6 +22,7 @@
 //     PORTL &= ~(1 << PL6);     // Turn off pump (PL6 low)
 // }
 
+#ifdef __AVR__
 
 #include "waterpump.h"
 #include <avr/io.h>
@@ -33,6 +34,20 @@
 // Pump status and timing
 volatile uint32_t pump_duration = 0;  // Countdown timer in milliseconds
 volatile uint8_t pump_running = 0;    // 1 = running, 0 = stopped
+
+
+
+
+
+
+// Temporary stub to fix undefined reference error
+void send_pump_status(const char* topic, const char* message) {
+    // Do nothing (or print to console if needed)
+}
+
+
+
+
 
 /**
  * Initializes the water pump hardware and configures Timer 4
@@ -136,3 +151,5 @@ ISR(TIMER4_COMPA_vect) {
         }
     }
 }
+
+#endif  // __AVR__
