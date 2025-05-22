@@ -1,138 +1,101 @@
-// #include <stdint.h>
-// #include "waterpump.h"
-
-// // Simulated AVR IO registers for unit testing only
-// uint8_t PORTL = 0;
-// uint8_t DDRL = 0;
-// #define PL6 6
-
-// void waterpump_init(void)
-// {
-//     DDRL |= (1 << PL6);       // Set PL6 as output
-//     PORTL &= ~(1 << PL6);     // Ensure pump is off
-// }
-
-// void waterpump_start(void)
-// {
-//     PORTL |= (1 << PL6);      // Turn on pump (PL6 high)
-// }
-
-// void waterpump_stop(void)
-// {
-//     PORTL &= ~(1 << PL6);     // Turn off pump (PL6 low)
-// }
-
+/**
+ * @file waterpump.c
+ * @brief Implementation of water pump control using Timer 4 (ATmega2560).
+ */
 
 #include "waterpump.h"
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-// PC7 (J8-2) is used to control the pump via Timer 4
-#define PUMP_PIN PC7
+// Optional: max allowed runtime (safety cap)
+#define MAX_PUMP_DURATION_MS 10000UL  // 10 seconds max
 
-// Pump status and timing
-volatile uint32_t pump_duration = 0;  // Countdown timer in milliseconds
-volatile uint8_t pump_running = 0;    // 1 = running, 0 = stopped
+// Internal state
+volatile uint32_t pump_duration = 0;
+volatile uint8_t pump_running = 0;
 
 /**
- * Initializes the water pump hardware and configures Timer 4
- * for 1ms interval interrupts to control timed pump activation.
+ * @brief (Optional) Stub to simulate MQTT or serial status publishing.
+ */
+static void send_pump_status(const char* topic, const char* msg) {
+    // Replace this with mqtt_publish(topic, msg) or uart_send_string
+}
+
+/**
+ * @brief Initialize water pump control and Timer 4 (1ms interval).
  */
 void pump_init(void) {
-    // Configure PC7 as output (pump control pin)
-    DDRC |= (1 << PUMP_PIN);
-    PORTC &= ~(1 << PUMP_PIN);  // Ensure pump is OFF initially
+    PUMP_DDR |= (1 << PUMP_PIN);
+    PUMP_PORT &= ~(1 << PUMP_PIN);  // Ensure OFF
 
-    // Reset Timer 4
+    // Configure Timer 4 for 1ms CTC interrupts
     TCCR4A = 0;
     TCCR4B = 0;
     TCNT4 = 0;
 
-    // Enable CTC mode (Clear Timer on Compare Match)
-    TCCR4B |= (1 << WGM42);
+    TCCR4B |= (1 << WGM42);                   // CTC mode
+    TCCR4B |= (1 << CS41) | (1 << CS40);      // Prescaler = 64
+    OCR4A = 249;                              // 16MHz/64/250 = 1kHz = 1ms
 
-    // Prescaler = 64 => 16MHz / 64 = 250kHz
-    // OCR4A = 249 => 250kHz / (249 + 1) = 1kHz = 1ms
-    TCCR4B |= (1 << CS41) | (1 << CS40);
-    OCR4A = 249;
-
-    // Enable Compare Match A interrupt for Timer 4
-    TIMSK4 |= (1 << OCIE4A);
-
-    sei();  // Enable global interrupts
+    TIMSK4 |= (1 << OCIE4A);                  // Enable compare match interrupt
+    sei();                                    // Global interrupt enable
 }
 
-/**
- * Turns on the pump for a given duration (in milliseconds).
- * Returns 1 if the operation started, or 0 if the pump is already running.
- */
 uint8_t pump_run(uint32_t duration_ms) {
-    cli();  // Atomic access to shared state
+    if (duration_ms == 0 || duration_ms > MAX_PUMP_DURATION_MS) return 0;
 
+    cli(); // critical section
     if (pump_running) {
         sei();
-        return 0;  // Already running
+        return 0;
     }
 
     pump_duration = duration_ms;
     pump_running = 1;
-    PORTC |= (1 << PUMP_PIN);  // Activate pump
-    send_pump_status("pump/started", "pump started");
-
+    PUMP_PORT |= (1 << PUMP_PIN);
     sei();
+
+    send_pump_status("pump/started", "Pump started");
     return 1;
 }
 
-/**
- * Immediately stops the pump and resets its state.
- */
-void pump_stop(void) {
-    cli();
-
-    PORTC &= ~(1 << PUMP_PIN);  // Deactivate pump
-    pump_duration = 0;
-    pump_running = 0;
-
-    sei();
-}
-
-/**
- * Checks if the pump is currently active.
- * @return 1 if running, 0 otherwise.
- */
-uint8_t pump_is_running(void) {
-    return pump_running;
-}
-
-/**
- * Starts the pump without setting a duration (runs indefinitely).
- * Returns 1 if started, or 0 if it was already running.
- */
 uint8_t pump_start(void) {
+    cli();
     if (pump_running) {
+        sei();
         return 0;
     }
 
     pump_running = 1;
-    PORTC |= (1 << PUMP_PIN);
-    send_pump_status("pump/started", "pump started");
+    pump_duration = 0;
+    PUMP_PORT |= (1 << PUMP_PIN);
+    sei();
 
+    send_pump_status("pump/started", "Pump started (manual)");
     return 1;
 }
 
-/**
- * Timer 4 Compare Match A interrupt service routine.
- * Called every 1ms to count down the active duration.
- * Stops the pump automatically when the timer expires.
- */
+void pump_stop(void) {
+    cli();
+    PUMP_PORT &= ~(1 << PUMP_PIN);
+    pump_duration = 0;
+    pump_running = 0;
+    sei();
+
+    send_pump_status("pump/stopped", "Pump stopped");
+}
+
+uint8_t pump_is_running(void) {
+    return pump_running;
+}
+
 ISR(TIMER4_COMPA_vect) {
     if (pump_running && pump_duration > 0) {
         pump_duration--;
-
         if (pump_duration == 0) {
-            PORTC &= ~(1 << PUMP_PIN);  // Deactivate pump
+            PUMP_PORT &= ~(1 << PUMP_PIN);
             pump_running = 0;
-            send_pump_status("pump/stopped", "pump stopped");
+            send_pump_status("pump/stopped", "Pump stopped (timeout)");
         }
     }
 }

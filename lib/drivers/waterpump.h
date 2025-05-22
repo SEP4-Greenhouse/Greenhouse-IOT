@@ -1,39 +1,41 @@
-// #pragma once
-// #include <stdint.h>
+/**
+ * @file waterpump.h
+ * @brief Water pump control interface for timed and manual operation.
+ */
 
-// void waterpump_init(void);
-// void waterpump_start(void);
-// void waterpump_stop(void);
-
-
-#pragma once
+#ifndef WATERPUMP_H
+#define WATERPUMP_H
 
 #include <stdint.h>
 
-// Pin used to control the water pump (connected to PC7 / OC4A)
-#define PUMP_PIN PC7
+// Configurable control pin (PC7 on PORTC)
+#define PUMP_PORT PORTC
+#define PUMP_DDR  DDRC
+#define PUMP_PIN  PC7
 
 /**
- * @brief Initializes the water pump system.
- *
- * Configures the control pin and sets up Timer 4 for 1 ms interrupts.
+ * @brief Initializes the water pump hardware and Timer 4.
+ * 
+ * Configures the output pin and sets up Timer 4 to generate
+ * 1 ms interval interrupts for managing timed pump activation.
  */
 void pump_init(void);
 
 /**
- * @brief Starts the pump for a specific duration.
- *
- * Turns on the pump and schedules it to stop automatically after the specified time.
- *
- * @param duration_ms Duration in milliseconds to run the pump.
- * @return 1 if the pump was started, 0 if it's already running.
+ * @brief Starts the pump for a specified time (non-blocking).
+ * 
+ * The pump will automatically turn off after the given duration.
+ * A maximum runtime safety limit is enforced internally.
+ * 
+ * @param duration_ms Duration to run (in milliseconds)
+ * @return 1 if started, 0 if already running or invalid duration
  */
 uint8_t pump_run(uint32_t duration_ms);
 
 /**
- * @brief Starts the pump indefinitely.
- *
- * @return 1 if the pump was started, 0 if it's already running.
+ * @brief Starts the pump indefinitely until manually stopped.
+ * 
+ * @return 1 if started, 0 if already running
  */
 uint8_t pump_start(void);
 
@@ -44,7 +46,9 @@ void pump_stop(void);
 
 /**
  * @brief Checks if the pump is currently running.
- *
- * @return 1 if running, 0 otherwise.
+ * 
+ * @return 1 if running, 0 otherwise
  */
 uint8_t pump_is_running(void);
+
+#endif // WATERPUMP_H
