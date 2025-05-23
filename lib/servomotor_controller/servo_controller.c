@@ -5,6 +5,10 @@
 #include <util/delay.h>
 #endif
 
+void control_servo_motor(uint8_t angle) {
+    control_servo_set_angle(angle);
+}
+
 void control_servo_init(void) {
     // Optional placeholder for initialization
 }
