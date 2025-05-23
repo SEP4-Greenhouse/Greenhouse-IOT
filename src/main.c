@@ -163,6 +163,7 @@
 #include "7segment_controller.h"
 #include "waterpump_controller.h"
 #include "mqtt_client.h"
+#include "dht11.h"
 
 #ifdef __AVR__
 #include <util/delay.h>
@@ -170,6 +171,8 @@
 #endif
 
 #define MAX_STRING_LENGTH 100
+#define READ_INTERVAL_MS 15000
+#define LOOP_DELAY_MS 1
 
 static uint8_t uart_buffer[MAX_STRING_LENGTH] = {0};
 static uint8_t uart_index = 0;
@@ -178,9 +181,7 @@ static volatile bool uart_done = false;
 static char tcp_rx_buffer[MAX_STRING_LENGTH] = {0};
 static bool tcp_string_received = false;
 
-// --------------------------------------------------
-// Utilities
-// --------------------------------------------------
+static int last_valid_display = 0;  // Stores the last valid temperature * 10 (e.g., 25.3°C = 253)
 
 static void strip_newline(char *str) {
     for (size_t i = 0; str[i]; i++) {
@@ -191,13 +192,8 @@ static void strip_newline(char *str) {
     }
 }
 
-// --------------------------------------------------
-// UART receive callback
-// --------------------------------------------------
-
 void console_rx(uint8_t byte) {
-    uart_send_blocking(USART_0, byte);  // Echo
-
+    uart_send_blocking(USART_0, byte);
     if (byte != '\r' && byte != '\n') {
         if (uart_index < MAX_STRING_LENGTH - 1) {
             uart_buffer[uart_index++] = byte;
@@ -210,10 +206,6 @@ void console_rx(uint8_t byte) {
     }
 }
 
-// --------------------------------------------------
-// TCP receive callback
-// --------------------------------------------------
-
 void tcp_rx(void) {
     size_t len = strlen(tcp_rx_buffer);
     tcp_rx_buffer[len] = '\r';
@@ -222,13 +214,8 @@ void tcp_rx(void) {
     tcp_string_received = true;
 }
 
-// --------------------------------------------------
-// Command handler
-// --------------------------------------------------
-
 static void handle_command(const char *cmd) {
     strip_newline((char *)cmd);
-
     uart_send_string_blocking(USART_0, "DEBUG: Received raw command: [");
     uart_send_string_blocking(USART_0, cmd);
     uart_send_string_blocking(USART_0, "]\n");
@@ -273,13 +260,11 @@ static void handle_command(const char *cmd) {
     }
 }
 
-// --------------------------------------------------
-// Main
-// --------------------------------------------------
-
 int main(void) {
     uart_init(USART_0, 9600, console_rx);
     wifi_init();
+    dht11_init();
+
 #ifdef __AVR__
     sei();
 #endif
@@ -303,6 +288,9 @@ int main(void) {
     control_display_set_number(0);
 
     uint32_t loop_counter = 0;
+    const uint32_t loop_threshold = READ_INTERVAL_MS / LOOP_DELAY_MS;
+
+    static int last_valid_display = 0; // Stored as temp * 10 (e.g., 25.3°C = 253)
 
     while (1) {
         if (uart_done) {
@@ -320,18 +308,39 @@ int main(void) {
             tcp_string_received = false;
         }
 
-        if (++loop_counter >= 5000) {
+        bool last_attempt_failed = false;
+
+        
+        if (++loop_counter >= loop_threshold) {
             loop_counter = 0;
-            int temp = 200 + (rand() % 100);  // 20.0°C to 29.9°C
-            char temp_msg[32];
-            sprintf(temp_msg, "TEMP: %d.%d\n", temp / 10, temp % 10);
-            uart_send_string_blocking(USART_0, temp_msg);
-            wifi_command_TCP_transmit((uint8_t *)temp_msg, strlen(temp_msg));
+
+            uint8_t temp_int = 0, temp_dec = 0;
+            bool success = false;
+
+            for (int i = 0; i < 1; i++) {
+                uart_send_string_blocking(USART_0, "Trying DHT11 read...\n");
+                if (dht11_get(NULL, NULL, &temp_int, &temp_dec) == DHT11_OK) {
+                    success = true;
+                    //break;
+                }
+                _delay_ms(250);
+            }
+
+            if (success) {
+                char msg[64];
+                sprintf(msg, "TEMP: %d.%dC\n", temp_int, temp_dec);
+                uart_send_string_blocking(USART_0, msg);
+                wifi_command_TCP_transmit((uint8_t *)msg, strlen(msg));
+
+                last_valid_display = temp_int * 10 + (temp_dec % 10);
+                control_display_set_number(last_valid_display);
+            } else {
+                uart_send_string_blocking(USART_0, "DHT11 Read FAIL\n");
+                // Keep displaying last_valid_display
+            }
         }
 
-#ifdef __AVR__
-        _delay_ms(1);
-#endif
+        _delay_ms(LOOP_DELAY_MS);
     }
 
     return 0;
