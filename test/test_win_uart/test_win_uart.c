@@ -1,9 +1,9 @@
-#ifdef __AVR__
+
 #include "unity.h"
 #include "uart.h"
 #include "mock_avr_io.h"
 #include "../fff.h"
-#endif
+
 DEFINE_FFF_GLOBALS;
 FAKE_VOID_FUNC(sei);
 FAKE_VOID_FUNC(cli);
