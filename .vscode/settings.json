@@ -1,18 +1,9 @@
 {
     "files.associations": {
-        "interrupt.h": "c",
-        "io.h": "c",
-        "mqtt_client.h": "c",
-        "delay.h": "c",
-        "includes.h": "c",
-        "unity.h": "c",
-        "buttons.h": "c",
-        "leds.h": "c",
-        "servo.h": "c",
-        "wifi.h": "c",
-        "string.h": "c",
+        "uart_mock.h": "c",
         "stdint.h": "c",
-        "stdio.h": "c"
-    },
-    "C_Cpp.dimInactiveRegions": false
-} 
+        "stdio.h": "c",
+        "compare": "c",
+        "wifi_mock.h": "c"
+    }
+}

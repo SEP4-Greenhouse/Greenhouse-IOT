@@ -7,24 +7,24 @@
 
 void control_waterpump_init(void)
 {
-    waterpump_init();
+    pump_init();
 }
 
 void control_waterpump_on(void)
 {
-    waterpump_start();
+    pump_start();
 }
 
 void control_waterpump_off(void)
 {
-    waterpump_stop();
+    pump_stop();
 }
 
 void control_waterpump_run_5s(void)
 {
-    waterpump_start();
+    pump_start();
 #ifdef __AVR__
     _delay_ms(5000);
 #endif
-    waterpump_stop();
+    pump_stop();
 }

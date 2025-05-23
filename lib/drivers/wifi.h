@@ -56,7 +56,7 @@ WIFI_ERROR_MESSAGE_t wifi_command_AT();
  * @param password Password for the SSID.
  * @return WIFI_ERROR_MESSAGE_t Error message based on the response from the module.
  */
-WIFI_ERROR_MESSAGE_t wifi_command_join_AP(char *ssid, char *password);
+WIFI_ERROR_MESSAGE_t wifi_command_join_AP(const char *ssid, const char *password);
 
 /**
  * @brief Disable echo from the WiFi module.
@@ -96,7 +96,7 @@ WIFI_ERROR_MESSAGE_t wifi_command_get_ip_from_URL(char * url, char *ip_address);
  * @param received_message_buffer Buffer to hold the received message.
  * @return WIFI_ERROR_MESSAGE_t Error message based on the response from the module.
  */
-WIFI_ERROR_MESSAGE_t wifi_command_create_TCP_connection(char *IP, uint16_t port, WIFI_TCP_Callback_t callback_when_message_received, char *received_message_buffer);
+WIFI_ERROR_MESSAGE_t wifi_command_create_TCP_connection(const char *IP, uint16_t port, WIFI_TCP_Callback_t callback_when_message_received, uint8_t *received_message_buffer);
 
 /**
  * @brief Transmit data over an established TCP connection.
@@ -105,7 +105,7 @@ WIFI_ERROR_MESSAGE_t wifi_command_create_TCP_connection(char *IP, uint16_t port,
  * @param length Length of the data to transmit.
  * @return WIFI_ERROR_MESSAGE_t Error message based on the response from the module.
  */
-WIFI_ERROR_MESSAGE_t wifi_command_TCP_transmit(uint8_t *data, uint16_t length);
+WIFI_ERROR_MESSAGE_t wifi_command_TCP_transmit(const uint8_t *data, uint16_t length);
 
 /**
  * @brief Disconnect from the current Access Point (AP).

@@ -8,6 +8,8 @@
  * @date 09-04-2025
  * @author Erland Larsen, VIA University College
  */
+
+#ifdef __AVR__  // Only compile on AVR (Arduino) platforms
 #include "soil.h"
 #include "avr/io.h"
 
@@ -58,3 +60,5 @@ uint16_t soil_read()
 
     return 1023 - adc_value;
 }
+
+#endif  // __AVR__

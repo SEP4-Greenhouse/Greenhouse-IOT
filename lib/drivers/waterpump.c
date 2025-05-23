@@ -1,3 +1,28 @@
+// #include <stdint.h>
+// #include "waterpump.h"
+
+// // Simulated AVR IO registers for unit testing only
+// uint8_t PORTL = 0;
+// uint8_t DDRL = 0;
+// #define PL6 6
+
+// void waterpump_init(void)
+// {
+//     DDRL |= (1 << PL6);       // Set PL6 as output
+//     PORTL &= ~(1 << PL6);     // Ensure pump is off
+// }
+
+// void waterpump_start(void)
+// {
+//     PORTL |= (1 << PL6);      // Turn on pump (PL6 high)
+// }
+
+// void waterpump_stop(void)
+// {
+//     PORTL &= ~(1 << PL6);     // Turn off pump (PL6 low)
+// }
+
+#ifdef __AVR__
 /**
  * @file waterpump.c
  * @brief Implementation of water pump control using Timer 4 (ATmega2560).
@@ -7,6 +32,30 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
+// PC7 (J8-2) is used to control the pump via Timer 4
+#define PUMP_PIN PC7
+
+// Pump status and timing
+volatile uint32_t pump_duration = 0;  // Countdown timer in milliseconds
+volatile uint8_t pump_running = 0;    // 1 = running, 0 = stopped
+
+
+
+
+
+
+// Temporary stub to fix undefined reference error
+void send_pump_status(const char* topic, const char* message) {
+    // Do nothing (or print to console if needed)
+}
+
+
+
+
+
+/**
+ * Initializes the water pump hardware and configures Timer 4
+ * for 1ms interval interrupts to control timed pump activation.
 // Optional: max allowed runtime (safety cap)
 #define MAX_PUMP_DURATION_MS 10000UL  // 10 seconds max
 
@@ -99,3 +148,5 @@ ISR(TIMER4_COMPA_vect) {
         }
     }
 }
+
+#endif  // __AVR__
