@@ -1,11 +1,15 @@
 #include "wifi.h"
 #include "includes.h"
-#include "uart.h"
 
+
+#include "uart.h"
 #define WIFI_DATABUFFERSIZE 128
 static uint8_t wifi_dataBuffer[WIFI_DATABUFFERSIZE];
 static uint8_t wifi_dataBufferIndex;
 static uint32_t wifi_baudrate;
+
+
+
 
 void wifi_init()
 {
