@@ -19,4 +19,5 @@ void hc_sr04_init(void);
  */
 uint16_t hc_sr04_takeMeasurement(void);
 
+uint16_t hc_sr04_getDistance(void);
 #endif // HC_SR04_H
