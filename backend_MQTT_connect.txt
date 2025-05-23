@@ -1,0 +1,21 @@
+const mqtt = require('mqtt');
+
+// Connect to broker (match IP or hostname used in hardware)
+const client = mqtt.connect('mqtt://broker.hivemq.com');
+
+client.on('connect', () => {
+    console.log('Connected to MQTT broker');
+
+    // Subscribe to the topic the device publishes to
+    client.subscribe('greenhouse/sensor/temp', (err) => {
+        if (!err) {
+            console.log('Subscribed to topic');
+        }
+    });
+});
+
+client.on('message', (topic, message) => {
+    console.log(`Received message: ${message.toString()} on topic: ${topic}`);
+    
+    // Store in DB, trigger alerts, send to frontend, etc.
+});

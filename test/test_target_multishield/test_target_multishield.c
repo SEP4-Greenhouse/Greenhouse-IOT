@@ -1,3 +1,4 @@
+#ifdef __AVR__
 
 #include "unity.h"
 #include "buttons.h"
@@ -8,7 +9,7 @@
 #include "display.h"
 #include "servo.h"
 #include "leds.h"
-
+#endif
 void setUp(void)
 {
     buttons_init();

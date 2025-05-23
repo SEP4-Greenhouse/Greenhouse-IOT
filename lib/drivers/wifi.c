@@ -79,7 +79,7 @@ WIFI_ERROR_MESSAGE_t wifi_command_AT()
     return wifi_command("AT", 1);
 }
 
-WIFI_ERROR_MESSAGE_t wifi_command_join_AP(char *ssid, char *password)
+WIFI_ERROR_MESSAGE_t wifi_command_join_AP(const char *ssid, const char *password)
 {
    /* WIFI_ERROR_MESSAGE_t error = wifi_command_AT();
     if (error != WIFI_OK)
@@ -175,18 +175,6 @@ WIFI_ERROR_MESSAGE_t wifi_command_get_ip_from_URL(char * url, char *ip_address){
 
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
 WIFI_ERROR_MESSAGE_t wifi_command_quit_AP(){
 
     return wifi_command("AT+CWQAP", 5);
@@ -276,7 +264,7 @@ void static wifi_TCP_callback(uint8_t byte)
   
 }
 
-WIFI_ERROR_MESSAGE_t wifi_command_create_TCP_connection(char *IP, uint16_t port, WIFI_TCP_Callback_t callback_when_message_received, char *received_message_buffer)
+WIFI_ERROR_MESSAGE_t wifi_command_create_TCP_connection(const char *IP, uint16_t port, WIFI_TCP_Callback_t callback_when_message_received, uint8_t *received_message_buffer)
 {
     received_message_buffer_static_pointer = received_message_buffer;
     callback_when_message_received_static = callback_when_message_received;
@@ -300,7 +288,7 @@ WIFI_ERROR_MESSAGE_t wifi_command_create_TCP_connection(char *IP, uint16_t port,
     return errorMessage;
 }
 
-WIFI_ERROR_MESSAGE_t wifi_command_TCP_transmit(uint8_t * data, uint16_t length){
+WIFI_ERROR_MESSAGE_t wifi_command_TCP_transmit(const uint8_t *data, uint16_t length){
     char sendbuffer[128];
     char portString[7];
     strcpy(sendbuffer, "AT+CIPSEND=");

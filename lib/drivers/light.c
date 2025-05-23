@@ -47,21 +47,22 @@ void light_init(void) {
  * @return 10-bit ADC value read from the photoresistor
  */
 uint16_t light_read(void) {
+    uint32_t timeout = 40000;  // ~5ms timeout
 
-uint32_t timeout = 40000;//if 2cc for incrementing and evaluation the timeout is 5ms
-    // The  MUX1:5 should be set to 100111 for choosing ADC15, which ius placed on PK0 (look at page 283)
-    ADMUX |= (1<<MUX2)|(1<<MUX1)|(1<<MUX0);
-    ADMUX &= ~((1<<MUX4)|(1<<MUX3));
-    ADCSRB |= (1<<MUX5);
+    // Clear previous channel selection (keep only REFS bits)
+    ADMUX &= 0xE0;  // Clear MUX0–MUX4 (bits 0–4)
+    ADMUX |= (1 << MUX2) | (1 << MUX1) | (1 << MUX0);  // Set MUX[2:0] = 111 (bits 2:0)
+    ADCSRB |= (1 << MUX5);  // Set MUX5 = 1 (for channels 8–15)
 
-    // Start the conversion
+    // Start conversion
     ADCSRA |= (1 << ADSC);
 
-    // Wait for the conversion to complete
-    while ((ADCSRA & (1 << ADSC))&& timeout > 0){timeout--;};
+    // Wait for conversion to complete or timeout
+    while ((ADCSRA & (1 << ADSC)) && timeout > 0) {
+        timeout--;
+    }
 
-    // Read the 10-bit ADC value
-    // ADCL must be read first, then ADCH
+    // Read result
     uint16_t adc_value = ADCL;
     adc_value |= (ADCH << 8);
 
