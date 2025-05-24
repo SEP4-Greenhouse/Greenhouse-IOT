@@ -156,13 +156,15 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include "wifi.h"
 #include "uart.h"
+#include "wifi.h"
+#include "mqtt_client.h"
+#include "pir_controller.h"
+#include "proximity_controller.h"
 #include "servo_controller.h"
 #include "leds_controller.h"
 #include "7segment_controller.h"
 #include "waterpump_controller.h"
-#include "mqtt_client.h"
 
 #ifdef __AVR__
 #include <util/delay.h>
@@ -298,9 +300,14 @@ int main(void) {
 
     uart_send_string_blocking(USART_0, "Type text to send: ");
 
+    // Initialize all subsystems
     control_leds_init();
     control_display_init();
     control_waterpump_init();
+    control_servo_init();
+    control_pir_init();
+    control_proximity_init();
+
     control_display_set_number(0);
 
     uint32_t loop_counter = 0;
@@ -321,6 +328,7 @@ int main(void) {
             tcp_string_received = false;
         }
 
+        // Every 5s, perform sensor checks
         if (++loop_counter >= 5000) {
             loop_counter = 0;
             int temp = 200 + (rand() % 100);  // 20.0°C to 29.9°C
@@ -328,10 +336,20 @@ int main(void) {
             sprintf(temp_msg, "TEMP: %d.%d\n", temp / 10, temp % 10);
             uart_send_string_blocking(USART_0, temp_msg);
             wifi_command_TCP_transmit((uint8_t *)temp_msg, strlen(temp_msg));
+            // PIR Motion Check
+            if (control_pir_is_motion_detected()) {
+                uart_send_string_blocking(USART_0, "[PIR] Motion Detected\n");
+                control_servo_set_angle(90);  // e.g., open something
+            }
+            // Proximity Check
+            if (control_proximity_is_close(15)) {
+                uart_send_string_blocking(USART_0, "[Proximity] Object detected up close\n");
+                control_servo_set_angle(0);  // retract or reset
+            }
         }
 
 #ifdef __AVR__
-        _delay_ms(1);
+        _delay_ms(1);  // Loop interval
 #endif
     }
 
