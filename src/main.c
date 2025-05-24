@@ -171,8 +171,8 @@
 #endif
 
 #define MAX_STRING_LENGTH 100
-#define READ_INTERVAL_MS 15000
-#define LOOP_DELAY_MS 1
+#define READ_INTERVAL_MS 15000  // 15 seconds
+#define LOOP_DELAY_MS 10
 
 static uint8_t uart_buffer[MAX_STRING_LENGTH] = {0};
 static uint8_t uart_index = 0;
@@ -181,9 +181,9 @@ static volatile bool uart_done = false;
 static char tcp_rx_buffer[MAX_STRING_LENGTH] = {0};
 static bool tcp_string_received = false;
 
-static int last_valid_display = 0;  // Stores the last valid temperature * 10 (e.g., 25.3°C = 253)
+static int last_valid_display = 234; // Start with dummy 23.4°C
 
-static void strip_newline(char *str) {
+void strip_newline(char *str) {
     for (size_t i = 0; str[i]; i++) {
         if (str[i] == '\r' || str[i] == '\n') {
             str[i] = '\0';
@@ -214,16 +214,17 @@ void tcp_rx(void) {
     tcp_string_received = true;
 }
 
-static void handle_command(const char *cmd) {
-    strip_newline((char *)cmd);
-    uart_send_string_blocking(USART_0, "DEBUG: Received raw command: [");
+void handle_command(const char *cmd) {
+    strip_newline((char *)cmd); // Remove any trailing newline characters from the input command
+    uart_send_string_blocking(USART_0, "DEBUG: Received command: ");
     uart_send_string_blocking(USART_0, cmd);
-    uart_send_string_blocking(USART_0, "]\n");
+    uart_send_blocking(USART_0, '\n');
 
+    // Control servo and LEDs based on BUTTON commands
     if (strcmp(cmd, "BUTTON1") == 0) {
-        control_servo_motor(0);
-        control_led_on(1);
-        control_display_set_number(1);
+        control_servo_motor(0);             // Move servo to 0 degrees
+        control_led_on(1);                  // Turn on LED 1
+        control_display_set_number(1);      // Show '1' on display
     } else if (strcmp(cmd, "BUTTON2") == 0) {
         control_servo_motor(90);
         control_led_on(2);
@@ -232,23 +233,22 @@ static void handle_command(const char *cmd) {
         control_servo_motor(180);
         control_led_on(3);
         control_display_set_number(3);
+
+    // Control LED 4 on/off
     } else if (strcmp(cmd, "LED4_ON") == 0) {
         control_led_on(4);
     } else if (strcmp(cmd, "LED4_OFF") == 0) {
         control_led_off(4);
+
+    // Control water pump and publish MQTT status
     } else if (strcmp(cmd, "PUMP_ON") == 0) {
         control_waterpump_on();
         mqtt_publish("greenhouse/status/pump", "ON");
     } else if (strcmp(cmd, "PUMP_OFF") == 0) {
         control_waterpump_off();
         mqtt_publish("greenhouse/status/pump", "OFF");
-    } else if (strcmp(cmd, "PUMP_ON_5S") == 0) {
-        control_waterpump_on();
-#ifdef __AVR__
-        _delay_ms(5000);
-#endif
-        control_waterpump_off();
-        mqtt_publish("greenhouse/status/pump", "ON_5S");
+
+    // If the input is a number, display it; otherwise, forward as TCP
     } else {
         int value = atoi(cmd);
         if (value || strcmp(cmd, "0") == 0) {
@@ -261,86 +261,93 @@ static void handle_command(const char *cmd) {
 }
 
 int main(void) {
-    uart_init(USART_0, 9600, console_rx);
-    wifi_init();
-    dht11_init();
+    uart_init(USART_0, 9600, console_rx);      // Initialize UART at 9600 baud with RX interrupt
+    wifi_init();                               // Initialize Wi-Fi module
+    dht11_init();                              // Initialize DHT11 sensor
 
 #ifdef __AVR__
-    sei();
+    sei(); // Enable global interrupts on AVR
 #endif
 
+    // Initial system status
     uart_send_string_blocking(USART_0, "Welcome from SEP4 IoT hardware!\n");
 
+    // Connect to Wi-Fi network
     wifi_command_join_AP("ONEPLUS", "00000000");
     uart_send_string_blocking(USART_0, "Wi-Fi Connected\n");
 
+    // Connect to TCP server (e.g., frontend/backend)
     wifi_command_create_TCP_connection("192.168.219.114", 5000, tcp_rx, (uint8_t *)tcp_rx_buffer);
     uart_send_string_blocking(USART_0, "TCP Connected to Frontend Backend\n");
 
+    // Connect to MQTT broker
     mqtt_connect("greenhouse_device_01");
     uart_send_string_blocking(USART_0, "MQTT CONNECT Sent\n");
 
+    // Display prompt
     uart_send_string_blocking(USART_0, "Type text to send: ");
 
+    // Initialize hardware components
     control_leds_init();
     control_display_init();
-    control_waterpump_init();
-    control_display_set_number(0);
+    // control_waterpump_init(); // Uncomment if pump is used
+    control_display_set_number(last_valid_display);  // Show dummy temp initially (23.4°C)
 
+    // Variables for periodic reading
     uint32_t loop_counter = 0;
     const uint32_t loop_threshold = READ_INTERVAL_MS / LOOP_DELAY_MS;
 
-    static int last_valid_display = 0; // Stored as temp * 10 (e.g., 25.3°C = 253)
-
     while (1) {
+        // Check if UART input is ready
         if (uart_done) {
-            mqtt_publish("greenhouse/sensor/temp", (char *)uart_buffer);
-            handle_command((char *)uart_buffer);
+            mqtt_publish("greenhouse/sensor/temp", (char *)uart_buffer); // Publish received command
+            handle_command((char *)uart_buffer);                          // Handle command
             uart_done = false;
-            memset(uart_buffer, 0, sizeof(uart_buffer));
+            memset(uart_buffer, 0, sizeof(uart_buffer));                  // Clear buffer
             uart_send_string_blocking(USART_0, "Type text to send: ");
         }
 
+        // Check for TCP input
         if (tcp_string_received) {
             uart_send_string_blocking(USART_0, "TCP Received: ");
             uart_send_string_blocking(USART_0, tcp_rx_buffer);
-            handle_command(tcp_rx_buffer);
+            handle_command(tcp_rx_buffer);           // Process TCP command
             tcp_string_received = false;
         }
 
-        bool last_attempt_failed = false;
-
-        
+        // Periodic temperature reading block
         if (++loop_counter >= loop_threshold) {
             loop_counter = 0;
+            _delay_ms(100); // Small wait before reading
 
             uint8_t temp_int = 0, temp_dec = 0;
             bool success = false;
 
-            for (int i = 0; i < 1; i++) {
-                uart_send_string_blocking(USART_0, "Trying DHT11 read...\n");
+            // Try reading DHT11 sensor up to 3 times
+            for (int i = 0; i < 3; i++) {
                 if (dht11_get(NULL, NULL, &temp_int, &temp_dec) == DHT11_OK) {
                     success = true;
-                    //break;
+                    break;
                 }
-                _delay_ms(250);
+                _delay_ms(200); // Delay between retries
             }
 
+            // If reading successful, display and publish
             if (success) {
+                last_valid_display = temp_int * 10 + (temp_dec % 10);  // Combine int and 1 decimal digit
+
                 char msg[64];
                 sprintf(msg, "TEMP: %d.%dC\n", temp_int, temp_dec);
                 uart_send_string_blocking(USART_0, msg);
                 wifi_command_TCP_transmit((uint8_t *)msg, strlen(msg));
 
-                last_valid_display = temp_int * 10 + (temp_dec % 10);
-                control_display_set_number(last_valid_display);
+                control_display_set_number(last_valid_display); // Update 7-segment display
             } else {
-                uart_send_string_blocking(USART_0, "DHT11 Read FAIL\n");
-                // Keep displaying last_valid_display
+                uart_send_string_blocking(USART_0, "DHT11 Read FAIL\n"); // Reading failed, retain last value
             }
         }
 
-        _delay_ms(LOOP_DELAY_MS);
+        _delay_ms(LOOP_DELAY_MS); // Main loop pacing
     }
 
     return 0;
