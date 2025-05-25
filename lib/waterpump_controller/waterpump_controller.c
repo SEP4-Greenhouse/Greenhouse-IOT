@@ -35,9 +35,5 @@ void control_waterpump_run_5s(void)
     _delay_ms(5000);
 #endif
     pump_stop();
-<<<<<<< HEAD
-}
-=======
     uart_send_string_blocking(USART_0, "Pump run complete\n");
 }
->>>>>>> 27b327cbae460f6565c7d1846198431da8aba846
