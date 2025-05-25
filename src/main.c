@@ -277,7 +277,7 @@ int main(void) {
     uart_send_string_blocking(USART_0, "Wi-Fi Connected\n");
 
     // Connect to TCP server (e.g., frontend/backend)
-    wifi_command_create_TCP_connection("192.168.219.114", 5000, tcp_rx, (uint8_t *)tcp_rx_buffer);
+    wifi_command_create_TCP_connection("192.168.6.114", 5000, tcp_rx, (uint8_t *)tcp_rx_buffer);
     uart_send_string_blocking(USART_0, "TCP Connected to Frontend Backend\n");
 
     // Connect to MQTT broker
@@ -290,7 +290,7 @@ int main(void) {
     // Initialize hardware components
     control_leds_init();
     control_display_init();
-    // control_waterpump_init(); // Uncomment if pump is used
+    control_waterpump_init(); // Uncomment if pump is used
     control_display_set_number(last_valid_display);  // Show dummy temp initially (23.4°C)
 
     // Variables for periodic reading
