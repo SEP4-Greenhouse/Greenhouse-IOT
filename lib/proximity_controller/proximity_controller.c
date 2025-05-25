@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "proximity_controller.h"
 #include "hc_sr04.h"
 #include "uart.h"

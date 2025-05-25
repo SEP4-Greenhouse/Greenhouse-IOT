@@ -159,6 +159,7 @@
 #include "uart.h"
 #include "wifi.h"
 #include "mqtt_client.h"
+
 #include "pir_controller.h"
 #include "proximity_controller.h"
 #include "servo_controller.h"
@@ -336,13 +337,22 @@ int main(void) {
             sprintf(temp_msg, "TEMP: %d.%d\n", temp / 10, temp % 10);
             uart_send_string_blocking(USART_0, temp_msg);
             wifi_command_TCP_transmit((uint8_t *)temp_msg, strlen(temp_msg));
+            
             // PIR Motion Check
             if (control_pir_is_motion_detected()) {
                 uart_send_string_blocking(USART_0, "[PIR] Motion Detected\n");
                 control_servo_set_angle(90);  // e.g., open something
+            } else {
+                uart_send_string_blocking(USART_0, "[PIR] No motion.\n");
             }
+
             // Proximity Check
-            if (control_proximity_is_close(15)) {
+            uint16_t distance = control_proximity_get_distance_cm();
+            char dist_msg[40];
+            sprintf(dist_msg, "[PROXIMITY] Distance: %u cm\n", distance);
+            uart_send_string_blocking(USART_0, dist_msg);
+
+            if (distance <= 15) {
                 uart_send_string_blocking(USART_0, "[Proximity] Object detected up close\n");
                 control_servo_set_angle(0);  // retract or reset
             }
@@ -352,6 +362,6 @@ int main(void) {
         _delay_ms(1);  // Loop interval
 #endif
     }
-
+    
     return 0;
 }

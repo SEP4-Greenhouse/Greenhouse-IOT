@@ -1,10 +1,15 @@
 #include <servo.h>
 #include "includes.h"
-
+#include <avr/io.h>
+#include <util/delay.h>
 
 #define DDR_SERVO DDRE
 #define P_SERVO PE3
 #define PORT_SERVO PORTE
+
+void servo_init(void) {
+    DDR_SERVO |= (1 << P_SERVO);  // Set the servo pin as output
+}
 
 void servo(uint8_t angle)
 {
