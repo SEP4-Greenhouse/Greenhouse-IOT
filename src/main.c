@@ -204,7 +204,7 @@ static void strip_newline(char *str) {
 // --------------------------------------------------
 
 void console_rx(uint8_t byte) {
-    uart_send_blocking(USART_0, byte);
+    uart_send_blocking(USART_0, byte);  // Echo back
     if (byte != '\r' && byte != '\n') {
         if (uart_index < MAX_STRING_LENGTH - 1) {
             uart_buffer[uart_index++] = byte;
@@ -239,22 +239,8 @@ void handle_command(const char *cmd) {
     uart_send_string_blocking(USART_0, cmd);
     uart_send_blocking(USART_0, '\n');
 
-    // Control servo and LEDs based on BUTTON commands
-    if (strcmp(cmd, "BUTTON1") == 0) {
-        control_servo_motor(0);             // Move servo to 0 degrees
-        control_led_on(1);                  // Turn on LED 1
-        control_display_set_number(1);      // Show '1' on display
-    } else if (strcmp(cmd, "BUTTON2") == 0) {
-        control_servo_motor(90);
-        control_led_on(2);
-        control_display_set_number(2);
-    } else if (strcmp(cmd, "BUTTON3") == 0) {
-        control_servo_motor(180);
-        control_led_on(3);
-        control_display_set_number(3);
-
-    // Control LED 4 on/off
-    } else if (strcmp(cmd, "LED4_ON") == 0) {
+    // Control LEDs based on BUTTON commands
+    if (strcmp(cmd, "LED4_ON") == 0) {
         control_led_on(4);
     } else if (strcmp(cmd, "LED4_OFF") == 0) {
         control_led_off(4);
@@ -338,6 +324,27 @@ int main(void) {
             uart_done = false;
             memset(uart_buffer, 0, sizeof(uart_buffer));                  // Clear buffer
             uart_send_string_blocking(USART_0, "Type text to send: ");
+
+            // Handle specific fan commands
+            if (strcmp((char *)uart_buffer, "FAN_ON") == 0) {
+                servo_on();
+                uart_send_string_blocking(USART_0, "Fan turned ON.\n");
+            } else if (strcmp((char *)uart_buffer, "FAN_OFF") == 0) {
+                servo_off();
+                uart_send_string_blocking(USART_0, "Fan turned OFF.\n");
+            } else if (strcmp((char *)uart_buffer, "FAN_STATE") == 0) {
+                if (servo_is_on()) {
+                    uart_send_string_blocking(USART_0, "Fan is ON.\n");
+                } else {
+                    uart_send_string_blocking(USART_0, "Fan is OFF.\n");
+                }
+            } else {
+                uart_send_string_blocking(USART_0, "Unknown command.\n");
+            }
+
+            uart_done = false;
+            memset(uart_buffer, 0, sizeof(uart_buffer));
+            uart_send_string_blocking(USART_0, "Awaiting next input: ");
         }
 
         // Check for TCP input
@@ -365,6 +372,10 @@ int main(void) {
                 _delay_ms(200); // Delay between retries
             }
 
+            if (control_pir_is_motion_detected()) {
+                uart_send_string_blocking(USART_0, "[PIR] Motion detected\n");
+            }
+
             // If reading successful, display and publish
             if (success) {
                 last_valid_display = temp_int * 10 + (temp_dec % 10);  // Combine int and 1 decimal digit
@@ -387,7 +398,6 @@ int main(void) {
 
             if (distance <= 15) {
                 uart_send_string_blocking(USART_0, "[Proximity] Object detected up close\n");
-                control_servo_set_angle(0);  // retract or reset
             }
         }
 

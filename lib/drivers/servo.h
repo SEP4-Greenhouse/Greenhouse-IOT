@@ -2,6 +2,6 @@
 #include <stdint.h>
 
 void servo_init(void);
-void servo(uint8_t angle);
-void servo_set_angle(uint8_t angle);
-uint8_t servo_get_angle(void);
+void servo_on(void);
+void servo_off(void);
+uint8_t servo_is_on(void);
