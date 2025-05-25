@@ -64,7 +64,7 @@ uint16_t hc_sr04_takeMeasurement(void) {
     TCCR1B = saved_TCCR1B;
     sei();
 
-    return (uint16_t)((count * 343UL) / SOUND_SPEED_DIVISOR);
+    return (uint16_t)((count * 549UL) / 1000);  // returns one-way distance in cm
 }
 
 uint16_t hc_sr04_getDistance(void) {
@@ -72,5 +72,5 @@ uint16_t hc_sr04_getDistance(void) {
     if (distance == 0) {
         return 0;
     }
-    return distance / 2;
+    return distance;
 }
