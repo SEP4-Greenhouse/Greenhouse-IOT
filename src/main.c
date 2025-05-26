@@ -105,6 +105,7 @@ int main(void) {
     uart_init(USART_0, 9600, console_rx);
     wifi_init();
     dht11_init();
+    _delay_ms(2000); // Delay to let the sensor read temperature
     control_moisture_init();
 
 #ifdef __AVR__
@@ -115,7 +116,7 @@ int main(void) {
     wifi_command_join_AP("ONEPLUS", "00000000");
     uart_send_string_blocking(USART_0, "Wi-Fi Connected\n");
 
-    wifi_command_create_TCP_connection("192.168.219.114", 5000, tcp_rx, (uint8_t *)tcp_rx_buffer);
+    wifi_command_create_TCP_connection("192.168.6.114", 5000, tcp_rx, (uint8_t *)tcp_rx_buffer);
     uart_send_string_blocking(USART_0, "TCP Connected to Frontend Backend\n");
 
     mqtt_connect("greenhouse_device_01");
