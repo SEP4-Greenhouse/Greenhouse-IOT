@@ -32,6 +32,35 @@ static bool tcp_string_received = false;
 
 static int last_valid_display = 234;
 
+void tcp_rx(void);
+
+const char* get_current_timestamp() {
+    return "2025-05-26T09:27:47.108Z";  // Placeholder
+}
+
+void send_http_post(const char* json_payload) {
+    const char* host = "greenhousesep4-fsg3f5ataucugteh.swedencentral-01.azurewebsites.net";
+    const char* path = "/reading(IOT)?sensorId=1";
+
+    // Create new TCP connection (port 80 = HTTP)
+    wifi_command_create_TCP_connection(host,443, tcp_rx, (uint8_t *)tcp_rx_buffer);
+
+    // Build HTTP request
+    char http_request[512];
+    snprintf(http_request, sizeof(http_request),
+        "POST %s HTTP/1.1\r\n"
+        "Host: %s\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: %d\r\n"
+        "Connection: close\r\n"
+        "\r\n"
+        "%s",
+        path, host, (int)strlen(json_payload), json_payload);
+
+    // Send HTTP request
+    wifi_command_TCP_transmit((uint8_t*)http_request, strlen(http_request));
+}
+
 void strip_newline(char *str) {
     for (size_t i = 0; str[i]; i++) {
         if (str[i] == '\r' || str[i] == '\n') {
@@ -192,6 +221,14 @@ int main(void) {
 
             MQTTMessage moisture_msg = create_moisture_message(moisture_percent);
             mqtt_publish(moisture_msg.topic, moisture_msg.payload);
+
+            // Send to backend via HTTP POST
+            char json_payload[128];
+            snprintf(json_payload, sizeof(json_payload),
+                     "{ \"timeStamp\": \"%s\", \"value\": %d }",
+                     get_current_timestamp(),
+                     moisture_percent);
+            send_http_post(json_payload);
         }
 
         _delay_ms(LOOP_DELAY_MS);
