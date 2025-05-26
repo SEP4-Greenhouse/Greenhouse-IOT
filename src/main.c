@@ -12,6 +12,7 @@
 #include "mqtt_client.h"
 #include "dht11.h"
 #include "moisture_controller.h"
+#include "mqtt_message_factory.h"
 
 #ifdef __AVR__
 #include <util/delay.h>
@@ -105,7 +106,7 @@ int main(void) {
     uart_init(USART_0, 9600, console_rx);
     wifi_init();
     dht11_init();
-    _delay_ms(2000); // Delay to let the sensor read temperature
+    _delay_ms(2000);
     control_moisture_init();
 
 #ifdef __AVR__
@@ -151,11 +152,12 @@ int main(void) {
             loop_counter = 0;
             _delay_ms(100);
 
-            // Temperature sensor read
             uint8_t temp_int = 0, temp_dec = 0;
+            uint8_t hum_int = 0, hum_dec = 0;
             bool success = false;
+
             for (int i = 0; i < 3; i++) {
-                if (dht11_get(NULL, NULL, &temp_int, &temp_dec) == DHT11_OK) {
+                if (dht11_get(&hum_int, &hum_dec, &temp_int, &temp_dec) == DHT11_OK) {
                     success = true;
                     break;
                 }
@@ -164,27 +166,32 @@ int main(void) {
 
             if (success) {
                 last_valid_display = temp_int * 10 + (temp_dec % 10);
+                control_display_set_number(last_valid_display);
+
+                MQTTMessage temp_msg = create_temperature_message(temp_int, temp_dec);
+                mqtt_publish(temp_msg.topic, temp_msg.payload);
+
+                MQTTMessage hum_msg = create_humidity_message(hum_int, hum_dec);
+                mqtt_publish(hum_msg.topic, hum_msg.payload);
+
                 char msg[64];
-                sprintf(msg, "TEMP: %d.%dC\n", temp_int, temp_dec);
+                snprintf(msg, sizeof(msg), "TEMP: %sC | HUM: %s%%\n", temp_msg.payload, hum_msg.payload);
                 uart_send_string_blocking(USART_0, msg);
                 wifi_command_TCP_transmit((uint8_t *)msg, strlen(msg));
-                control_display_set_number(last_valid_display);
             } else {
                 uart_send_string_blocking(USART_0, "DHT11 Read FAIL\n");
             }
 
-            // Moisture read and debug
             uint16_t moisture_raw = control_moisture_get_raw_value();
             uint8_t moisture_percent = control_moisture_get_percent();
-
             const char* level = control_moisture_get_level(moisture_raw);
+
             char moist_msg[96];
             sprintf(moist_msg, "[MOISTURE] ADC: %u, %u%% (%s)\n", moisture_raw, moisture_percent, level);
             uart_send_string_blocking(USART_0, moist_msg);
 
-            char moist_mqtt[32];
-            sprintf(moist_mqtt, "%u", moisture_percent);
-            mqtt_publish("greenhouse/sensor/moisture", moist_mqtt);
+            MQTTMessage moisture_msg = create_moisture_message(moisture_percent);
+            mqtt_publish(moisture_msg.topic, moisture_msg.payload);
         }
 
         _delay_ms(LOOP_DELAY_MS);
