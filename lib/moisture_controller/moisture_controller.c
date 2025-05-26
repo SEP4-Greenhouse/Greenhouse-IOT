@@ -66,7 +66,6 @@ uint8_t control_moisture_get_percent(void) {
     return moisture_percent_map[3]; // Assume highest percentage for lowest range (e.g. "Soaked")
 }
 
-
 const char* control_moisture_get_level(uint16_t adc_value) {
     for (uint8_t i = 0; i < 4; ++i) {
         if (adc_value >= moisture_map[i]) {
