@@ -315,11 +315,15 @@ int main(void) {
     control_servo_init();
     control_pir_init();
     control_proximity_init();
+    control_buttons_init();
 
     control_display_set_number(last_valid_display);  // Show dummy temp initially (23.4°C)
 
     // Variables for periodic reading
     uint32_t loop_counter = 0;
+    uint32_t press_duration = 0;
+    uint8_t is_long_pressing = 0;
+    uint8_t last_direction = 1;  // 1 = clockwise, 0 = counter
     const uint32_t loop_threshold = READ_INTERVAL_MS / LOOP_DELAY_MS;
 
     while (1) {
@@ -332,18 +336,14 @@ int main(void) {
             uart_send_string_blocking(USART_0, "Type text to send: ");
 
             // Handle specific fan commands
-            if (strcmp((char *)uart_buffer, "FAN_ON") == 0) {
-                servo_on();
-                uart_send_string_blocking(USART_0, "Fan turned ON.\n");
-            } else if (strcmp((char *)uart_buffer, "FAN_OFF") == 0) {
-                servo_off();
-                uart_send_string_blocking(USART_0, "Fan turned OFF.\n");
-            } else if (strcmp((char *)uart_buffer, "FAN_STATE") == 0) {
-                if (servo_is_on()) {
-                    uart_send_string_blocking(USART_0, "Fan is ON.\n");
-                } else {
-                    uart_send_string_blocking(USART_0, "Fan is OFF.\n");
-                }
+            if (strcmp((char *)uart_buffer, "servo_up") == 0) {
+                control_servo_step_clockwise();
+            } else if (strcmp((char *)uart_buffer, "servo_down") == 0) {
+                control_servo_step_counterclockwise();
+            } else if (strcmp((char *)uart_buffer, "servo_status") == 0) {
+                const char* status = control_servo_get_position_status();
+                uart_send_string_blocking(USART_0, status);
+                uart_send_string_blocking(USART_0, "\n");
             } else {
                 uart_send_string_blocking(USART_0, "Unknown command.\n");
             }
@@ -407,16 +407,31 @@ int main(void) {
             }
         }
 
-        // Handle button presses (Toggle Servo Motor ON/OFF, Toggle Water Pump ON/OFF, Show sensor status via UART, & Perform a "Soft Reset")
+        // Handle button presses (Toggle Servo Motor angle, Toggle Water Pump ON/OFF, Show sensor status via UART, & Perform a "Soft Reset")
         if (control_button_s1_pressed()) {
-            if (!fan_state) {
-                control_servo_on();
-                fan_state = 1;
-            } else {
-                control_servo_off();
-                fan_state = 0;
+            press_duration++;
+            if (press_duration > 2000 && !is_long_pressing) {
+                is_long_pressing = 1;
             }
-            _delay_ms(250);  // Basic debounce
+            if (is_long_pressing) {
+                if (last_direction) {
+                    if (control_servo_get_angle() >= 90) last_direction = 0;
+                } else {
+                    if (control_servo_get_angle() <= 0) last_direction = 1;
+                }
+
+                if (last_direction) control_servo_step_clockwise();
+                else control_servo_step_counterclockwise();
+                _delay_ms(150);
+            }
+        } else {
+            if (press_duration > 0 && press_duration <= 2000) {
+                uint8_t angle = control_servo_get_angle();
+                if (angle == 90) control_servo_set_angle(0);
+                else control_servo_set_angle(90);
+            }
+            press_duration = 0;
+            is_long_pressing = 0;
         }
 
         if (control_button_s2_pressed()) {
@@ -442,12 +457,10 @@ int main(void) {
 
         if (control_button_s4_pressed()) {
             // Soft reset (turn everything off)
-            control_servo_off();
-            control_waterpump_off();
-            fan_state = 0;
-            pump_state = 0;
+            control_servo_set_angle(0);        // Close the window
+            control_waterpump_off();           // Turn off the pump
             uart_send_string_blocking(USART_0, "System: soft reset (all off)\n");
-            _delay_ms(250);
+            _delay_ms(500);  // Debounce delay
         }
 
         _delay_ms(LOOP_DELAY_MS); // Main loop pacing
