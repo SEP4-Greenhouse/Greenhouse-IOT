@@ -160,6 +160,7 @@
 #include "wifi.h"
 #include "mqtt_client.h"
 
+#include "button_controller.h"
 #include "pir_controller.h"
 #include "proximity_controller.h"
 #include "servo_controller.h"
@@ -280,6 +281,11 @@ int main(void) {
     wifi_init();                               // Initialize Wi-Fi module
     dht11_init();                              // Initialize DHT11 sensor
 
+    uint8_t fan_state = 0;
+    uint8_t pump_state = 0;
+
+    control_buttons_init();
+
 #ifdef __AVR__
     sei(); // Enable global interrupts on AVR
 #endif
@@ -399,6 +405,49 @@ int main(void) {
             if (distance <= 15) {
                 uart_send_string_blocking(USART_0, "[Proximity] Object detected up close\n");
             }
+        }
+
+        // Handle button presses (Toggle Servo Motor ON/OFF, Toggle Water Pump ON/OFF, Show sensor status via UART, & Perform a "Soft Reset")
+        if (control_button_s1_pressed()) {
+            if (!fan_state) {
+                control_servo_on();
+                fan_state = 1;
+            } else {
+                control_servo_off();
+                fan_state = 0;
+            }
+            _delay_ms(250);  // Basic debounce
+        }
+
+        if (control_button_s2_pressed()) {
+            if (!pump_state) {
+                control_waterpump_on();
+                pump_state = 1;
+            } else {
+                control_waterpump_off();
+                pump_state = 0;
+            }
+            _delay_ms(250);
+        }
+
+        if (control_button_s3_pressed()) {
+            // Sensor snapshot
+            uint8_t motion = control_pir_is_motion_detected();
+            uint16_t dist = control_proximity_get_distance_cm();
+            char buffer[64];
+            sprintf(buffer, "Status - Motion: %s | Distance: %u cm\n", motion ? "YES" : "NO", dist);
+            uart_send_string_blocking(USART_0, buffer);
+            _delay_ms(250);
+        }
+
+        if (control_button_s4_pressed()) {
+            // Soft reset (turn everything off)
+            control_servo_off();
+            control_waterpump_off();
+            fan_state = 0;
+            pump_state = 0;
+            uart_send_string_blocking(USART_0, "System: soft reset (all off)\n");
+            _delay_ms(250);
         }
 
         _delay_ms(LOOP_DELAY_MS); // Main loop pacing

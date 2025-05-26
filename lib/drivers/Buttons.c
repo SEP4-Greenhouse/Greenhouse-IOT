@@ -9,7 +9,6 @@
 #define B_PORT PORTF
 #define B_PIN PINF
 
-
 void buttons_init(){
     B_DDR&=~((1<<B_1) | (1<<B_2) | (1<<B_3)) ; // Make them 3 buttons to be input. 
     B_PORT|=((1<<B_1) | (1<<B_2) | (1<<B_3)) ; // enable the pullup resistor. 
@@ -26,4 +25,3 @@ uint8_t buttons_2_pressed(){
 uint8_t buttons_3_pressed(){
     return !(B_PIN & (1 << B_3));
 }
-
