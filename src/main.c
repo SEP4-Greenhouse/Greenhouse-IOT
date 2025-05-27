@@ -5,14 +5,12 @@
 
 #include "wifi.h"
 #include "uart.h"
-// #include "servo_controller.h"
 #include "leds_controller.h"
 #include "7segment_controller.h"
 #include "waterpump_controller.h"
 #include "mqtt_client.h"
 #include "dht11.h"
 #include "moisture_controller.h"
-#include "mqtt_message_factory.h"
 #include "pir_controller.h"
 #include "proximity_controller.h"
 
@@ -29,14 +27,22 @@ static uint8_t uart_buffer[MAX_STRING_LENGTH] = {0};
 static uint8_t uart_index = 0;
 static volatile bool uart_done = false;
 
-static char tcp_rx_buffer[MAX_STRING_LENGTH] = {0};
-static bool tcp_string_received = false;
-
 static int last_valid_display = 234;
 
-// ------------------------------------------------------------------
-// Simulated timestamp generator
-// ------------------------------------------------------------------
+static char mqtt_rx_buffer[256] = {0};
+static bool mqtt_response_received = false;
+
+void mqtt_rx(void) {
+    size_t len = strlen(mqtt_rx_buffer);
+    mqtt_rx_buffer[len] = '\r';
+    mqtt_rx_buffer[len + 1] = '\n';
+    mqtt_rx_buffer[len + 2] = '\0';
+
+    uart_send_string_blocking(USART_0, "[MQTT RX] Response:\n");
+    uart_send_string_blocking(USART_0, mqtt_rx_buffer);
+    mqtt_response_received = true;
+}
+
 char* get_fake_timestamp(void) {
     static char buffer[40];
     static unsigned long total_seconds = 0;
@@ -51,39 +57,6 @@ char* get_fake_timestamp(void) {
              "%04d-%02d-%02dT%02d:%02d:%02d.000Z",
              base_year, month, day, hours, minutes, seconds);
     return buffer;
-}
-
-void tcp_rx(void) {
-    size_t len = strlen(tcp_rx_buffer);
-    tcp_rx_buffer[len] = '\r';
-    tcp_rx_buffer[len + 1] = '\n';
-    tcp_rx_buffer[len + 2] = '\0';
-    tcp_string_received = true;
-}
-
-void send_http_post(const char* json_payload) {
-    const char* host = "greenhousesep4-fsg3f5ataucugteh.swedencentral-01.azurewebsites.net";
-    const char* path = "/reading";
-    const char* bearer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9lbWFpbGFkZHJlc3MiOiJhcnR1cnNAZ21haWwuY29tIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiIxMiIsImV4cCI6MTc0ODMxMzA3NSwiaXNzIjoiR3JlZW5ob3VzZUFQSSIsImF1ZCI6IkdyZWVuaG91c2VDbGllbnRzIn0.HGb6cy_Jgmr2ILFVaWVgyg-KRUUDM6Zdsq8GD5DPA6o"; // shortened for safety
-
-    wifi_command_create_TCP_connection(host, 80, tcp_rx, (uint8_t *)tcp_rx_buffer);
-
-    char http_request[768];
-    snprintf(http_request, sizeof(http_request),
-             "POST %s HTTP/1.1\r\n"
-             "Host: %s\r\n"
-             "Authorization: Bearer %s\r\n"
-             "Content-Type: application/json\r\n"
-             "Content-Length: %d\r\n"
-             "Connection: close\r\n"
-             "\r\n"
-             "%s",
-             path, host, bearer_token, (int)strlen(json_payload), json_payload);
-
-    wifi_command_TCP_transmit((uint8_t*)http_request, strlen(http_request));
-    uart_send_string_blocking(USART_0, "HTTP POST sent to API\n");
-    uart_send_string_blocking(USART_0, json_payload);
-    uart_send_blocking(USART_0, '\n');
 }
 
 void strip_newline(char *str) {
@@ -139,7 +112,6 @@ void handle_command(const char *cmd) {
         if (value || strcmp(cmd, "0") == 0) {
             control_display_set_number(value);
         } else {
-            wifi_command_TCP_transmit((uint8_t *)cmd, strlen(cmd));
             uart_send_string_blocking(USART_0, "Unknown command, echoed\n");
         }
     }
@@ -151,7 +123,7 @@ int main(void) {
     dht11_init();
     _delay_ms(2000);
     control_moisture_init();
-    control_pir_init();  // PIR still initialized but no print output
+    control_pir_init();
     control_proximity_init();
 
 #ifdef __AVR__
@@ -162,11 +134,17 @@ int main(void) {
     wifi_command_join_AP("ONEPLUS", "00000000");
     uart_send_string_blocking(USART_0, "Wi-Fi Connected\n");
 
-    wifi_command_create_TCP_connection("192.168.6.114", 5000, tcp_rx, (uint8_t *)tcp_rx_buffer);
-    uart_send_string_blocking(USART_0, "TCP Connected to Frontend Backend\n");
+    // MQTT TCP connection with callback
+    wifi_command_create_TCP_connection("broker.hivemq.com", 1883, mqtt_rx, (uint8_t*)mqtt_rx_buffer);
+    uart_send_string_blocking(USART_0, "TCP Connected to MQTT Broker\n");
 
     mqtt_connect("greenhouse_device_01");
     uart_send_string_blocking(USART_0, "MQTT CONNECT Sent\n");
+
+    // MQTT subscribe to backend commands
+    mqtt_subscribe("greenhouse/control/pump");
+    uart_send_string_blocking(USART_0, "MQTT SUBSCRIBE Sent\n");
+
     uart_send_string_blocking(USART_0, "Type text to send: ");
 
     control_leds_init();
@@ -184,13 +162,6 @@ int main(void) {
             uart_done = false;
             memset(uart_buffer, 0, sizeof(uart_buffer));
             uart_send_string_blocking(USART_0, "Type text to send: ");
-        }
-
-        if (tcp_string_received) {
-            uart_send_string_blocking(USART_0, "TCP Received: ");
-            uart_send_string_blocking(USART_0, tcp_rx_buffer);
-            handle_command(tcp_rx_buffer);
-            tcp_string_received = false;
         }
 
         if (++loop_counter >= loop_threshold) {
@@ -214,31 +185,27 @@ int main(void) {
                 control_display_set_number(last_valid_display);
 
                 char* timestamp = get_fake_timestamp();
-                char payload[256];
+                char mqtt_msg[128];
 
-                snprintf(payload, sizeof(payload),
-                         "{ \"timeStamp\": \"%s\", \"value\": %d, \"unit\": \"\u00b0C\", \"sensorId\": 1 }",
+                snprintf(mqtt_msg, sizeof(mqtt_msg),
+                         "{ \"timeStamp\": \"%s\", \"value\": %d, \"unit\": \"\xC2\xB0C\", \"sensorId\": 1 }",
                          timestamp, temp_int);
-                send_http_post(payload);
+                mqtt_publish("greenhouse/sensor/temperature", mqtt_msg);
 
-                snprintf(payload, sizeof(payload),
+                snprintf(mqtt_msg, sizeof(mqtt_msg),
                          "{ \"timeStamp\": \"%s\", \"value\": %d, \"unit\": \"%%\", \"sensorId\": 2 }",
                          timestamp, hum_int);
-                send_http_post(payload);
+                mqtt_publish("greenhouse/sensor/humidity", mqtt_msg);
 
-                uint16_t moisture_raw = control_moisture_get_raw_value();
                 uint8_t moisture_percent = control_moisture_get_percent();
-                snprintf(payload, sizeof(payload),
+                snprintf(mqtt_msg, sizeof(mqtt_msg),
                          "{ \"timeStamp\": \"%s\", \"value\": %d, \"unit\": \"%%\", \"sensorId\": 3 }",
                          timestamp, moisture_percent);
-                send_http_post(payload);
+                mqtt_publish("greenhouse/sensor/moisture", mqtt_msg);
             } else {
                 uart_send_string_blocking(USART_0, "DHT11 Read FAIL\n");
             }
 
-            // PIR detection intentionally suppressed
-
-            // Proximity logic
             uint16_t distance = control_proximity_get_distance_cm();
             char dist_msg[40];
             snprintf(dist_msg, sizeof(dist_msg), "[PROXIMITY] Distance: %u cm\n", distance);
