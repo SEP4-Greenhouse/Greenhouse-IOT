@@ -32,33 +32,55 @@ static bool tcp_string_received = false;
 
 static int last_valid_display = 234;
 
-void tcp_rx(void);
+// Simulated timestamp tracker
+char* get_fake_timestamp(void) {
+    static char buffer[40];
+    static unsigned long total_seconds = 0;
 
-const char* get_current_timestamp() {
-    return "2025-05-26T09:27:47.108Z";  // Placeholder
+    total_seconds += 15;  // Add 15 seconds per loop interval
+
+    int base_year = 2025, month = 5, day = 26;
+    int hours = (total_seconds / 3600) % 24;
+    int minutes = (total_seconds / 60) % 60;
+    int seconds = total_seconds % 60;
+
+    snprintf(buffer, sizeof(buffer),
+             "%04d-%02d-%02dT%02d:%02d:%02d.000Z",
+             base_year, month, day, hours, minutes, seconds);
+    return buffer;
+}
+
+void tcp_rx(void) {
+    size_t len = strlen(tcp_rx_buffer);
+    tcp_rx_buffer[len] = '\r';
+    tcp_rx_buffer[len + 1] = '\n';
+    tcp_rx_buffer[len + 2] = '\0';
+    tcp_string_received = true;
 }
 
 void send_http_post(const char* json_payload) {
     const char* host = "greenhousesep4-fsg3f5ataucugteh.swedencentral-01.azurewebsites.net";
-    const char* path = "/reading(IOT)?sensorId=1";
+    const char* path = "/reading";
+    const char* bearer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."; // Token truncated for brevity
 
-    // Create new TCP connection (port 80 = HTTP)
-    wifi_command_create_TCP_connection(host,443, tcp_rx, (uint8_t *)tcp_rx_buffer);
+    wifi_command_create_TCP_connection(host, 80, tcp_rx, (uint8_t *)tcp_rx_buffer);
 
-    // Build HTTP request
-    char http_request[512];
+    char http_request[768];
     snprintf(http_request, sizeof(http_request),
-        "POST %s HTTP/1.1\r\n"
-        "Host: %s\r\n"
-        "Content-Type: application/json\r\n"
-        "Content-Length: %d\r\n"
-        "Connection: close\r\n"
-        "\r\n"
-        "%s",
-        path, host, (int)strlen(json_payload), json_payload);
+             "POST %s HTTP/1.1\r\n"
+             "Host: %s\r\n"
+             "Authorization: Bearer %s\r\n"
+             "Content-Type: application/json\r\n"
+             "Content-Length: %d\r\n"
+             "Connection: close\r\n"
+             "\r\n"
+             "%s",
+             path, host, bearer_token, (int)strlen(json_payload), json_payload);
 
-    // Send HTTP request
     wifi_command_TCP_transmit((uint8_t*)http_request, strlen(http_request));
+    uart_send_string_blocking(USART_0, "HTTP POST sent to API\n");
+    uart_send_string_blocking(USART_0, json_payload);
+    uart_send_blocking(USART_0, '\n');
 }
 
 void strip_newline(char *str) {
@@ -82,14 +104,6 @@ void console_rx(uint8_t byte) {
         uart_done = true;
         uart_send_blocking(USART_0, '\n');
     }
-}
-
-void tcp_rx(void) {
-    size_t len = strlen(tcp_rx_buffer);
-    tcp_rx_buffer[len] = '\r';
-    tcp_rx_buffer[len + 1] = '\n';
-    tcp_rx_buffer[len + 2] = '\0';
-    tcp_string_received = true;
 }
 
 void handle_command(const char *cmd) {
@@ -197,38 +211,28 @@ int main(void) {
                 last_valid_display = temp_int * 10 + (temp_dec % 10);
                 control_display_set_number(last_valid_display);
 
-                MQTTMessage temp_msg = create_temperature_message(temp_int, temp_dec);
-                mqtt_publish(temp_msg.topic, temp_msg.payload);
+                char* timestamp = get_fake_timestamp();
 
-                MQTTMessage hum_msg = create_humidity_message(hum_int, hum_dec);
-                mqtt_publish(hum_msg.topic, hum_msg.payload);
+                char payload[256];
+                snprintf(payload, sizeof(payload),
+                         "{ \"timeStamp\": \"%s\", \"value\": %d, \"unit\": \"\u00b0C\", \"sensorId\": 1 }",
+                         timestamp, temp_int);
+                send_http_post(payload);
 
-                char msg[64];
-                snprintf(msg, sizeof(msg), "TEMP: %sC | HUM: %s%%\n", temp_msg.payload, hum_msg.payload);
-                uart_send_string_blocking(USART_0, msg);
-                wifi_command_TCP_transmit((uint8_t *)msg, strlen(msg));
+                snprintf(payload, sizeof(payload),
+                         "{ \"timeStamp\": \"%s\", \"value\": %d, \"unit\": \"%%\", \"sensorId\": 2 }",
+                         timestamp, hum_int);
+                send_http_post(payload);
+
+                uint16_t moisture_raw = control_moisture_get_raw_value();
+                uint8_t moisture_percent = control_moisture_get_percent();
+                snprintf(payload, sizeof(payload),
+                         "{ \"timeStamp\": \"%s\", \"value\": %d, \"unit\": \"%%\", \"sensorId\": 3 }",
+                         timestamp, moisture_percent);
+                send_http_post(payload);
             } else {
                 uart_send_string_blocking(USART_0, "DHT11 Read FAIL\n");
             }
-
-            uint16_t moisture_raw = control_moisture_get_raw_value();
-            uint8_t moisture_percent = control_moisture_get_percent();
-            const char* level = control_moisture_get_level(moisture_raw);
-
-            char moist_msg[96];
-            sprintf(moist_msg, "[MOISTURE] ADC: %u, %u%% (%s)\n", moisture_raw, moisture_percent, level);
-            uart_send_string_blocking(USART_0, moist_msg);
-
-            MQTTMessage moisture_msg = create_moisture_message(moisture_percent);
-            mqtt_publish(moisture_msg.topic, moisture_msg.payload);
-
-            // Send to backend via HTTP POST
-            char json_payload[128];
-            snprintf(json_payload, sizeof(json_payload),
-                     "{ \"timeStamp\": \"%s\", \"value\": %d }",
-                     get_current_timestamp(),
-                     moisture_percent);
-            send_http_post(json_payload);
         }
 
         _delay_ms(LOOP_DELAY_MS);
