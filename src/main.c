@@ -3,19 +3,18 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include "uart.h"
 #include "wifi.h"
-#include "mqtt_client.h"
-
-#include "pir_controller.h"
-#include "proximity_controller.h"
-#include "servo_controller.h"
+#include "uart.h"
+// #include "servo_controller.h"
 #include "leds_controller.h"
 #include "7segment_controller.h"
 #include "waterpump_controller.h"
+#include "mqtt_client.h"
 #include "dht11.h"
 #include "moisture_controller.h"
 #include "mqtt_message_factory.h"
+#include "pir_controller.h"
+#include "proximity_controller.h"
 
 #ifdef __AVR__
 #include <util/delay.h>
@@ -33,13 +32,61 @@ static volatile bool uart_done = false;
 static char tcp_rx_buffer[MAX_STRING_LENGTH] = {0};
 static bool tcp_string_received = false;
 
-static int last_valid_display = 234; // Start with dummy 23.4°C
+static int last_valid_display = 234;
 
-// --------------------------------------------------
-// Utilities
-// --------------------------------------------------
+// ------------------------------------------------------------------
+// Simulated timestamp generator
+// ------------------------------------------------------------------
+char* get_fake_timestamp(void) {
+    static char buffer[40];
+    static unsigned long total_seconds = 0;
 
-static void strip_newline(char *str) {
+    total_seconds += 15;
+    int base_year = 2025, month = 5, day = 26;
+    int hours = (total_seconds / 3600) % 24;
+    int minutes = (total_seconds / 60) % 60;
+    int seconds = total_seconds % 60;
+
+    snprintf(buffer, sizeof(buffer),
+             "%04d-%02d-%02dT%02d:%02d:%02d.000Z",
+             base_year, month, day, hours, minutes, seconds);
+    return buffer;
+}
+
+void tcp_rx(void) {
+    size_t len = strlen(tcp_rx_buffer);
+    tcp_rx_buffer[len] = '\r';
+    tcp_rx_buffer[len + 1] = '\n';
+    tcp_rx_buffer[len + 2] = '\0';
+    tcp_string_received = true;
+}
+
+void send_http_post(const char* json_payload) {
+    const char* host = "greenhousesep4-fsg3f5ataucugteh.swedencentral-01.azurewebsites.net";
+    const char* path = "/reading";
+    const char* bearer_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9lbWFpbGFkZHJlc3MiOiJhcnR1cnNAZ21haWwuY29tIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvbmFtZWlkZW50aWZpZXIiOiIxMiIsImV4cCI6MTc0ODMxMzA3NSwiaXNzIjoiR3JlZW5ob3VzZUFQSSIsImF1ZCI6IkdyZWVuaG91c2VDbGllbnRzIn0.HGb6cy_Jgmr2ILFVaWVgyg-KRUUDM6Zdsq8GD5DPA6o"; // shortened for safety
+
+    wifi_command_create_TCP_connection(host, 80, tcp_rx, (uint8_t *)tcp_rx_buffer);
+
+    char http_request[768];
+    snprintf(http_request, sizeof(http_request),
+             "POST %s HTTP/1.1\r\n"
+             "Host: %s\r\n"
+             "Authorization: Bearer %s\r\n"
+             "Content-Type: application/json\r\n"
+             "Content-Length: %d\r\n"
+             "Connection: close\r\n"
+             "\r\n"
+             "%s",
+             path, host, bearer_token, (int)strlen(json_payload), json_payload);
+
+    wifi_command_TCP_transmit((uint8_t*)http_request, strlen(http_request));
+    uart_send_string_blocking(USART_0, "HTTP POST sent to API\n");
+    uart_send_string_blocking(USART_0, json_payload);
+    uart_send_blocking(USART_0, '\n');
+}
+
+void strip_newline(char *str) {
     for (size_t i = 0; str[i]; i++) {
         if (str[i] == '\r' || str[i] == '\n') {
             str[i] = '\0';
@@ -48,12 +95,8 @@ static void strip_newline(char *str) {
     }
 }
 
-// --------------------------------------------------
-// UART receive callback
-// --------------------------------------------------
-
 void console_rx(uint8_t byte) {
-    uart_send_blocking(USART_0, byte);  // Echo back
+    uart_send_blocking(USART_0, byte);
     if (byte != '\r' && byte != '\n') {
         if (uart_index < MAX_STRING_LENGTH - 1) {
             uart_buffer[uart_index++] = byte;
@@ -66,22 +109,6 @@ void console_rx(uint8_t byte) {
     }
 }
 
-// --------------------------------------------------
-// TCP receive callback
-// --------------------------------------------------
-
-void tcp_rx(void) {
-    size_t len = strlen(tcp_rx_buffer);
-    tcp_rx_buffer[len] = '\r';
-    tcp_rx_buffer[len + 1] = '\n';
-    tcp_rx_buffer[len + 2] = '\0';
-    tcp_string_received = true;
-}
-
-// --------------------------------------------------
-// Command handler
-// --------------------------------------------------
-
 void handle_command(const char *cmd) {
     strip_newline((char *)cmd);
     uart_send_string_blocking(USART_0, "DEBUG: Received command: ");
@@ -89,15 +116,12 @@ void handle_command(const char *cmd) {
     uart_send_blocking(USART_0, '\n');
 
     if (strcmp(cmd, "BUTTON1") == 0) {
-        control_servo_motor(0);
         control_led_on(1);
         control_display_set_number(1);
     } else if (strcmp(cmd, "BUTTON2") == 0) {
-        control_servo_motor(90);
         control_led_on(2);
         control_display_set_number(2);
     } else if (strcmp(cmd, "BUTTON3") == 0) {
-        control_servo_motor(180);
         control_led_on(3);
         control_display_set_number(3);
     } else if (strcmp(cmd, "LED4_ON") == 0) {
@@ -110,14 +134,6 @@ void handle_command(const char *cmd) {
     } else if (strcmp(cmd, "PUMP_OFF") == 0) {
         control_waterpump_off();
         mqtt_publish("greenhouse/status/pump", "OFF");
-
-#ifdef __AVR__
-        _delay_ms(5000);
-#endif
-        control_waterpump_off();
-        mqtt_publish("greenhouse/status/pump", "ON_5S");
-
-    // If the input is a number, display it; otherwise, forward as TCP
     } else {
         int value = atoi(cmd);
         if (value || strcmp(cmd, "0") == 0) {
@@ -129,16 +145,14 @@ void handle_command(const char *cmd) {
     }
 }
 
-// --------------------------------------------------
-// Main
-// --------------------------------------------------
-
 int main(void) {
     uart_init(USART_0, 9600, console_rx);
     wifi_init();
     dht11_init();
     _delay_ms(2000);
     control_moisture_init();
+    control_pir_init();  // PIR still initialized but no print output
+    control_proximity_init();
 
 #ifdef __AVR__
     sei();
@@ -157,12 +171,8 @@ int main(void) {
 
     control_leds_init();
     control_display_init();
-    control_waterpump_init(); // Uncomment if pump is used
-    control_servo_init();
-    control_pir_init();
-    control_proximity_init();
-
-    control_display_set_number(last_valid_display);  // Show dummy temp initially (23.4°C)
+    control_waterpump_init();
+    control_display_set_number(last_valid_display);
 
     uint32_t loop_counter = 0;
     const uint32_t loop_threshold = READ_INTERVAL_MS / LOOP_DELAY_MS;
@@ -196,21 +206,16 @@ int main(void) {
                     success = true;
                     break;
                 }
-                _delay_ms(200); // Delay between retries
+                _delay_ms(2500);
             }
 
-            if (control_pir_is_motion_detected()) {
-                uart_send_string_blocking(USART_0, "[PIR] Motion detected\n");
-            }
-
-            // If reading successful, display and publish
             if (success) {
                 last_valid_display = temp_int * 10 + (temp_dec % 10);
                 control_display_set_number(last_valid_display);
 
                 char* timestamp = get_fake_timestamp();
-
                 char payload[256];
+
                 snprintf(payload, sizeof(payload),
                          "{ \"timeStamp\": \"%s\", \"value\": %d, \"unit\": \"\u00b0C\", \"sensorId\": 1 }",
                          timestamp, temp_int);
@@ -231,20 +236,12 @@ int main(void) {
                 uart_send_string_blocking(USART_0, "DHT11 Read FAIL\n");
             }
 
-            // Proximity Check
+            // PIR detection intentionally suppressed
+
+            // Proximity logic
             uint16_t distance = control_proximity_get_distance_cm();
             char dist_msg[40];
-            sprintf(dist_msg, "[PROXIMITY] Distance: %u cm\n", distance);
-            uart_send_string_blocking(USART_0, dist_msg);
-
-            if (distance <= 15) {
-                uart_send_string_blocking(USART_0, "[Proximity] Object detected up close\n");
-            }
-
-            // Proximity Check
-            uint16_t distance = control_proximity_get_distance_cm();
-            char dist_msg[40];
-            sprintf(dist_msg, "[PROXIMITY] Distance: %u cm\n", distance);
+            snprintf(dist_msg, sizeof(dist_msg), "[PROXIMITY] Distance: %u cm\n", distance);
             uart_send_string_blocking(USART_0, dist_msg);
 
             if (distance <= 15) {
