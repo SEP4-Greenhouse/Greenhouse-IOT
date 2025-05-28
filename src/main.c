@@ -107,6 +107,39 @@ void handle_command(const char *cmd) {
     } else if (strcmp(cmd, "PUMP_OFF") == 0) {
         control_waterpump_off();
         mqtt_publish("greenhouse/status/pump", "OFF");
+        
+    } else if (strcmp(cmd, "LED_ALL_OFF") == 0) {
+        for (int i = 1; i <= 4; i++) control_led_off(i);
+
+    } else if (strcmp(cmd, "DISPLAY_RESET") == 0) {
+        control_display_set_number(0);
+
+    } else if (strcmp(cmd, "READ_DHT11") == 0) {
+        uint8_t hum_int, hum_dec, temp_int, temp_dec;
+        if (dht11_get(&hum_int, &hum_dec, &temp_int, &temp_dec) == DHT11_OK) {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "Temp: %dC, Humidity: %d%%\n", temp_int, hum_int);
+            uart_send_string_blocking(USART_0, buf);
+        } else {
+            uart_send_string_blocking(USART_0, "Failed to read DHT11 sensor.\n");
+        }
+
+    } else if (strcmp(cmd, "READ_MOISTURE") == 0) {
+        uint8_t moisture = control_moisture_get_percent();
+        char buf[40];
+        snprintf(buf, sizeof(buf), "Soil moisture: %d%%\n", moisture);
+        uart_send_string_blocking(USART_0, buf);
+
+    } else if (strcmp(cmd, "READ_PROXIMITY") == 0) {
+        uint16_t distance = control_proximity_get_distance_cm();
+        char buf[40];
+        snprintf(buf, sizeof(buf), "Proximity: %d cm\n", distance);
+        uart_send_string_blocking(USART_0, buf);
+
+    } else if (strcmp(cmd, "READ_PIR") == 0) {
+        bool motion = control_pir_detected();
+        uart_send_string_blocking(USART_0, motion ? "Motion detected\n" : "No motion\n");
+
     } else {
         int value = atoi(cmd);
         if (value || strcmp(cmd, "0") == 0) {
@@ -116,6 +149,7 @@ void handle_command(const char *cmd) {
         }
     }
 }
+
 
 int main(void) {
     uart_init(USART_0, 9600, console_rx);
