@@ -168,6 +168,7 @@ int main(void) {
     _delay_ms(2000);
     control_moisture_init();
     control_pir_init();
+    control_pir_detected();
     control_proximity_init();
 
 #ifdef __AVR__

@@ -1,6 +1,7 @@
 #include "pir_controller.h"
 #include "pir.h"
 #include "uart.h"
+#include <stdbool.h>
 
 // Internal callback function for when motion is detected
 static void motion_detected_callback(void) {
@@ -20,4 +21,9 @@ void control_pir_deinit(void) {
 // Query whether motion has been detected
 uint8_t control_pir_is_motion_detected(void) {
     return pir_is_motion_detected();  // 1 = motion, 0 = no motion
+}
+
+bool control_pir_detected() {
+    // Replace with actual PIR sensor logic
+    return false;
 }
