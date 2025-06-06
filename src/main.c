@@ -15,39 +15,46 @@
 #include "proximity_controller.h"
 
 #ifdef __AVR__
-#include <util/delay.h>
-#include <avr/interrupt.h>
+#include <util/delay.h>      // AVR-specific delay functions
+#include <avr/interrupt.h>   // Interrupt handling
 #endif
 
-#define MAX_STRING_LENGTH 100
-#define READ_INTERVAL_MS 15000
-#define LOOP_DELAY_MS 10
+// Constants for buffer size and timing intervals
+#define MAX_STRING_LENGTH 100     // Max length for UART command input
+#define READ_INTERVAL_MS 15000    // Interval to read sensor data
+#define LOOP_DELAY_MS 10          // Delay for pacing the main loop
 
+// Global variables for UART communication
 static uint8_t uart_buffer[MAX_STRING_LENGTH] = {0};
 static uint8_t uart_index = 0;
-static volatile bool uart_done = false;
+static volatile bool uart_done = false; // Flag indicating a full command was received
 
+// Stores the last valid sensor value shown on the display
 static int last_valid_display = 234;
 
+// MQTT receive buffer and flag
 static char mqtt_rx_buffer[256] = {0};
 static bool mqtt_response_received = false;
 
+// Callback for when MQTT data is received
 void mqtt_rx(void) {
     size_t len = strlen(mqtt_rx_buffer);
     mqtt_rx_buffer[len] = '\r';
     mqtt_rx_buffer[len + 1] = '\n';
     mqtt_rx_buffer[len + 2] = '\0';
 
+    // Print the received message to UART (for debugging/logging)
     uart_send_string_blocking(USART_0, "[MQTT RX] Response:\n");
     uart_send_string_blocking(USART_0, mqtt_rx_buffer);
     mqtt_response_received = true;
 }
 
+// Generates a simulated ISO 8601 timestamp (for testing/logging purposes)
 char* get_fake_timestamp(void) {
     static char buffer[40];
     static unsigned long total_seconds = 0;
 
-    total_seconds += 15;
+    total_seconds += 15; // Increment by 15 seconds each call
     int base_year = 2025, month = 5, day = 26;
     int hours = (total_seconds / 3600) % 24;
     int minutes = (total_seconds / 60) % 60;
@@ -59,6 +66,7 @@ char* get_fake_timestamp(void) {
     return buffer;
 }
 
+// Strips newline/carriage return characters from UART command string
 void strip_newline(char *str) {
     for (size_t i = 0; str[i]; i++) {
         if (str[i] == '\r' || str[i] == '\n') {
@@ -68,6 +76,7 @@ void strip_newline(char *str) {
     }
 }
 
+// Called when a byte is received via UART; builds up a command string
 void console_rx(uint8_t byte) {
     uart_send_blocking(USART_0, byte);
     if (byte != '\r' && byte != '\n') {
@@ -75,6 +84,7 @@ void console_rx(uint8_t byte) {
             uart_buffer[uart_index++] = byte;
         }
     } else {
+        // End of command received
         uart_buffer[uart_index] = '\0';
         uart_index = 0;
         uart_done = true;

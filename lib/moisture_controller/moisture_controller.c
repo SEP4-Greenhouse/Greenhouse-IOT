@@ -9,19 +9,21 @@
 
 #define MOISTURE_ADC_CHANNEL 0  // Adjust as needed
 
-// Moisture level thresholds
+// Moisture level breakpoints and their interpretations
 const uint16_t moisture_map[] = {900, 700, 500, 0};
 const uint8_t moisture_percent_map[] = {2, 30, 60, 100};
 const char* moisture_label_map[] = {"Dry", "Slightly Wet", "Very Wet", "Soaked"};
 
+// Initialize the moisture controller
 void control_moisture_init(void) {
-    soil_init();
+    soil_init(); // Set up ADC for soil sensor
 
 #ifdef __AVR__
     uart_send_string_blocking(USART_0, "[INIT] Moisture sensor ADC initialized\n");
 #endif
 }
 
+// Read raw value from soil sensor (ADC value: 0–1023)
 uint16_t control_moisture_get_raw_value(void) {
     uint16_t adc_value;
     adc_value = soil_read();
@@ -35,6 +37,7 @@ uint16_t control_moisture_get_raw_value(void) {
     return adc_value;
 }
 
+// Convert raw ADC value into moisture percentage (0–100%)
 uint8_t control_moisture_get_percent(void) {
     uint16_t adc = control_moisture_get_raw_value();
     if (adc > 1023) adc = 1023;
@@ -66,6 +69,7 @@ uint8_t control_moisture_get_percent(void) {
     return moisture_percent_map[3]; // Assume highest percentage for lowest range (e.g. "Soaked")
 }
 
+// Return a textual label representing moisture level
 const char* control_moisture_get_level(uint16_t adc_value) {
     for (uint8_t i = 0; i < 4; ++i) {
         if (adc_value >= moisture_map[i]) {

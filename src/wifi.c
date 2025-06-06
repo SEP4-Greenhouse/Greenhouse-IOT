@@ -1,20 +1,17 @@
 #include "wifi.h"
 #include "includes.h"
-
-
 #include "uart.h"
+
 #define WIFI_DATABUFFERSIZE 128
-static uint8_t wifi_dataBuffer[WIFI_DATABUFFERSIZE];
-static uint8_t wifi_dataBufferIndex;
-static uint32_t wifi_baudrate;
+static uint8_t wifi_dataBuffer[WIFI_DATABUFFERSIZE]; // Buffer for incoming WiFi data
+static uint8_t wifi_dataBufferIndex;                 // Index for buffer
+static uint32_t wifi_baudrate;                       // Baudrate for WiFi UART
 
-
-
-
+// Initialize the WiFi module by setting UART parameters
 void wifi_init()
 {
     wifi_baudrate = 115200;
-    uart_init(USART_WIFI, wifi_baudrate, NULL);
+    uart_init(USART_WIFI, wifi_baudrate, NULL); // Initialize WiFi UART with no callback
 }
 
 /*
@@ -23,6 +20,7 @@ void wifi_transmit(uint8_t *data, uint8_t length)
     uart_send_array_blocking(USART_WIFI, data, length);
 }*/
 
+// Clear WiFi data buffer and reset index
 void static wifi_clear_databuffer_and_index()
 {
     for (uint16_t i = 0; i < WIFI_DATABUFFERSIZE; i++)
@@ -30,22 +28,29 @@ void static wifi_clear_databuffer_and_index()
     wifi_dataBufferIndex = 0;
 }
 
+// Callback to collect incoming bytes into buffer
 void static wifi_command_callback(uint8_t received_byte)
 {
     wifi_dataBuffer[wifi_dataBufferIndex] = received_byte;
     wifi_dataBufferIndex++;
 }
+
+// Send AT command to WiFi module and wait for response
 WIFI_ERROR_MESSAGE_t wifi_command(const char *str, uint16_t timeOut_s)
 {
+    // Backup current UART callback
     UART_Callback_t callback_state = uart_get_rx_callback(USART_WIFI);
+
+    // Set WiFi UART to use command callback
     uart_init(USART_WIFI, wifi_baudrate, wifi_command_callback);
 
+    // Prepare and send command
     char sendbuffer[128];
     strcpy(sendbuffer, str);
 
     uart_send_string_blocking(USART_WIFI, strcat(sendbuffer, "\r\n"));
 
-    // better wait sequence...
+    // Wait sequence...
     for (uint16_t i = 0; i < timeOut_s * 100UL; i++) // timeout after 20 sec
     {
         _delay_ms(10);
@@ -66,12 +71,10 @@ WIFI_ERROR_MESSAGE_t wifi_command(const char *str, uint16_t timeOut_s)
     else
         error= WIFI_ERROR_RECEIVING_GARBAGE;
     
+    // Restore old callback and clean up
     wifi_clear_databuffer_and_index();
     uart_init(USART_WIFI, wifi_baudrate, callback_state);
     return error; 
-
-
-
 }
 
 WIFI_ERROR_MESSAGE_t wifi_command_AT()
@@ -108,13 +111,12 @@ WIFI_ERROR_MESSAGE_t wifi_command_get_ip_from_URL(char * url, char *ip_address){
     
     uint16_t timeOut_s = 5;
 
-
-     UART_Callback_t callback_state = uart_get_rx_callback(USART_WIFI);
+    UART_Callback_t callback_state = uart_get_rx_callback(USART_WIFI);
     uart_init(USART_WIFI, wifi_baudrate, wifi_command_callback);
 
     uart_send_string_blocking(USART_WIFI, strcat(sendbuffer, "\r\n"));
 
-    // better wait sequence...
+    // Wait sequence...
     for (uint16_t i = 0; i < timeOut_s * 100UL; i++) // timeout after 20 sec
     {
         _delay_ms(10);
@@ -135,12 +137,6 @@ WIFI_ERROR_MESSAGE_t wifi_command_get_ip_from_URL(char * url, char *ip_address){
     else
         error= WIFI_ERROR_RECEIVING_GARBAGE;
     
-   
-
-
-
-
-
     char *ipStart = strstr((char *)wifi_dataBuffer, "CIPDOMAIN:");
     if (ipStart != NULL) {
         // Move the pointer to the start of the IP address
@@ -164,15 +160,11 @@ WIFI_ERROR_MESSAGE_t wifi_command_get_ip_from_URL(char * url, char *ip_address){
     //{
    //     ip_address[i] =wifi_dataBuffer[i];
    // }
-    
 
-
-
+   // Restore old callback and clean up
     wifi_clear_databuffer_and_index();
     uart_init(USART_WIFI, wifi_baudrate, callback_state);
     return error; 
-
-
 }
 
 WIFI_ERROR_MESSAGE_t wifi_command_quit_AP(){
@@ -194,8 +186,6 @@ WIFI_ERROR_MESSAGE_t wifi_command_close_TCP_connection()
 {
     return wifi_command("AT+CIPCLOSE", 5);
 }
-
-
 
 #define BUF_SIZE 128
 #define IPD_PREFIX "+IPD,"
@@ -261,7 +251,6 @@ void static wifi_TCP_callback(uint8_t byte)
             }
             break;
     }
-  
 }
 
 WIFI_ERROR_MESSAGE_t wifi_command_create_TCP_connection(const char *IP, uint16_t port, WIFI_TCP_Callback_t callback_when_message_received, uint8_t *received_message_buffer)
@@ -300,5 +289,5 @@ WIFI_ERROR_MESSAGE_t wifi_command_TCP_transmit(const uint8_t *data, uint16_t len
         return errorMessage;
     
 uart_send_array_blocking(USART_WIFI, data,  length);
-return WIFI_OK;
+return WIFI_OK; // Simplified: always return OK
 }

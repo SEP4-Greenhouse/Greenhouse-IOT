@@ -5,21 +5,23 @@
 #include <string.h>
 #include <stdio.h>
 
+// MQTT control packet types
 #define MQTT_PACKET_CONNECT    0x10
 #define MQTT_PACKET_PUBLISH    0x30
 #define MQTT_PACKET_SUBSCRIBE  0x82
 
 #define MAX_MQTT_RX_SIZE 128
-char mqtt_rx_buffer[MAX_MQTT_RX_SIZE]; // Global RX buffer
+char mqtt_rx_buffer[MAX_MQTT_RX_SIZE]; // Global RX buffer for incoming MQTT data
 
+// Function to establish an MQTT connection to the broker
 void mqtt_connect(const char* client_id) {
     uint8_t packet[128];
     size_t index = 0;
 
-    packet[index++] = MQTT_PACKET_CONNECT;
+    packet[index++] = MQTT_PACKET_CONNECT; // MQTT connect control packet
 
     size_t client_len = strlen(client_id);
-    uint8_t remaining_length = 10 + 2 + client_len;
+    uint8_t remaining_length = 10 + 2 + client_len; // Remaining payload length
     packet[index++] = remaining_length;
 
     // Protocol Name "MQTT"
@@ -33,7 +35,7 @@ void mqtt_connect(const char* client_id) {
     packet[index++] = 0x04; // Protocol level 4 (MQTT 3.1.1)
     packet[index++] = 0x02; // Clean session
     packet[index++] = 0x00;
-    packet[index++] = 60;   // Keep alive
+    packet[index++] = 60;   // Keep-alive time in seconds
 
     // Payload: client ID
     packet[index++] = (client_len >> 8) & 0xFF;
@@ -44,6 +46,7 @@ void mqtt_connect(const char* client_id) {
     wifi_command_TCP_transmit(packet, index);
 }
 
+// Function to publish a message to a specific MQTT topic
 void mqtt_publish(const char* topic, const char* message) {
     uint8_t packet[256];
     size_t index = 0;
@@ -55,17 +58,20 @@ void mqtt_publish(const char* topic, const char* message) {
     packet[index++] = MQTT_PACKET_PUBLISH;
     packet[index++] = remaining_length;
 
+    // Topic name
     packet[index++] = (topic_len >> 8) & 0xFF;
     packet[index++] = topic_len & 0xFF;
     memcpy(&packet[index], topic, topic_len);
     index += topic_len;
 
+    // Message payload
     memcpy(&packet[index], message, message_len);
     index += message_len;
 
     wifi_command_TCP_transmit(packet, index);
 }
 
+// Function to subscribe to a topic
 void mqtt_subscribe(const char* topic) {
     uint8_t packet[128];
     size_t index = 0;
@@ -74,7 +80,7 @@ void mqtt_subscribe(const char* topic) {
     size_t topic_len = strlen(topic);
     size_t remaining_length = 2 + 2 + topic_len + 1;
 
-    packet[index++] = MQTT_PACKET_SUBSCRIBE;
+    packet[index++] = MQTT_PACKET_SUBSCRIBE; // MQTT subscribe packet
     packet[index++] = remaining_length;
 
     packet[index++] = (packet_id >> 8) & 0xFF;

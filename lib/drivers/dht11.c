@@ -6,6 +6,7 @@
 #include <avr/interrupt.h>
 #endif
 
+// DHT11 sensor is connected to Port L, Pin 1
 #define DATA_BIT PL1
 #define DATA_PIN PINL
 #define DATA_DDR DDRL
@@ -13,10 +14,13 @@
 #define READ_INTERVAL_MS 2000
 #define MAX_TIMINGS 85
 
+// Initialization function
 void dht11_init() {
     // Optional hardware config
 }
 
+// Read temperature and humidity from DHT11 sensor
+// Returns error code and fills in the passed humidity and temperature pointers
 DHT11_ERROR_MESSAGE_t dht11_get(uint8_t* humidity_integer, uint8_t* humidity_decimal,
                                  uint8_t* temperature_integer, uint8_t* temperature_decimal) {
     uint8_t laststate = 1;
@@ -25,19 +29,20 @@ DHT11_ERROR_MESSAGE_t dht11_get(uint8_t* humidity_integer, uint8_t* humidity_dec
     uint8_t i;
     uint8_t data[5] = {0};
 
-    // Start signal
-    DATA_DDR |= (1 << DATA_BIT);
-    DATA_PORT &= ~(1 << DATA_BIT);
+     // Prepare to send start signal to sensor
+    DATA_DDR |= (1 << DATA_BIT);     // Set pin as output
+    DATA_PORT &= ~(1 << DATA_BIT);   // Pull pin low for 18 ms
     _delay_ms(18);
-    DATA_PORT |= (1 << DATA_BIT);
+    DATA_PORT |= (1 << DATA_BIT);    // Pull pin high for 40 us
     _delay_us(40);
-    DATA_DDR &= ~(1 << DATA_BIT);
+    DATA_DDR &= ~(1 << DATA_BIT);    // Set pin as input
     DATA_PORT |= (1 << DATA_BIT); // enable pull-up
 
 #ifdef __AVR__
-    cli();  // 🔒 Disable interrupts
+    cli();  // Disable interrupts
 #endif
 
+    // Read response and 40 bits of data (5 bytes)
     for (i = 0; i < MAX_TIMINGS; i++) {
         counter = 0;
         while ((DATA_PIN & (1 << DATA_BIT)) == laststate) {
@@ -57,7 +62,7 @@ DHT11_ERROR_MESSAGE_t dht11_get(uint8_t* humidity_integer, uint8_t* humidity_dec
     }
 
 #ifdef __AVR__
-    sei();  // 🔓 Re-enable interrupts
+    sei();  // Re-enable interrupts
 #endif
 
     // Debug print all received bits

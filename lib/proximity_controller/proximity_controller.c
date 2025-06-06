@@ -5,10 +5,12 @@
 
 #define DEFAULT_THRESHOLD_CM 20
 
+// Initialize the proximity sensor (ultrasonic)
 void control_proximity_init(void) {
     hc_sr04_init();
 }
 
+// Measure distance and log it via UART
 uint16_t control_proximity_get_distance_cm(void) {
     uint16_t distance = hc_sr04_getDistance();  // Real reading from sensor
     char msg[40];

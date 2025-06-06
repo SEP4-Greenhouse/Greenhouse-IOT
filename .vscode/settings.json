@@ -5,6 +5,8 @@
         "stdio.h": "c",
         "compare": "c",
         "wifi_mock.h": "c",
-        "mqtt_message_factory.h": "c"
+        "mqtt_message_factory.h": "c",
+        "interrupt.h": "c",
+        "display.h": "c"
     }
 }
