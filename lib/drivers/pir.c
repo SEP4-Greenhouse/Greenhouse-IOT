@@ -41,11 +41,13 @@ void pir_init(pir_callback_t callback) {
     sei();
 }
 
+// Disables the PIR sensor's interrupt
 void pir_deinit(void) {
-    EIMSK &= ~(1 << INT2);
-    pir_callback = NULL;
+    EIMSK &= ~(1 << INT2);  // Disable INT2 interrupt
+    pir_callback = NULL;    // Remove callback
 }
 
+// Reads the PIR input pin directly to check for motion (logic HIGH)
 uint8_t pir_is_motion_detected(void) {
     return (PIR_PIN & (1 << PIR_BIT)) ? 1 : 0;
 }

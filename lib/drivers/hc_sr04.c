@@ -23,12 +23,14 @@
 #define MAX_WAIT_ECHO_US    24000UL
 #define SOUND_SPEED_DIVISOR 125UL
 
+// Initializes the HC-SR04 sensor's pins
 void hc_sr04_init(void) {
-    TRIGGER_DDR |= (1 << TRIGGER_PIN);
-    TRIGGER_PORT &= ~(1 << TRIGGER_PIN);
-    ECHO_DDR &= ~(1 << ECHO_PIN);
+    TRIGGER_DDR |= (1 << TRIGGER_PIN);      // Set trigger pin (PL7) as output
+    TRIGGER_PORT &= ~(1 << TRIGGER_PIN);    // Ensure trigger is LOW initially
+    ECHO_DDR &= ~(1 << ECHO_PIN);           // Set echo pin (PL6) as input
 }
 
+// Measures distance based on ultrasonic echo timing
 uint16_t hc_sr04_takeMeasurement(void) {
     uint16_t count = 0;
     uint8_t saved_TCCR1B = TCCR1B;
@@ -64,9 +66,11 @@ uint16_t hc_sr04_takeMeasurement(void) {
     TCCR1B = saved_TCCR1B;
     sei();
 
+    // gives one-way distance in cm
     return (uint16_t)((count * 549UL) / 1000);  // returns one-way distance in cm
 }
 
+// High-level API to get distance in cm
 uint16_t hc_sr04_getDistance(void) {
     uint16_t distance = hc_sr04_takeMeasurement();
     if (distance == 0) {
