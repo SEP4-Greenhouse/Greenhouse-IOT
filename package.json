@@ -1,0 +1,30 @@
+{
+  "name": "greenhouse-iot",
+  "version": "1.0.0",
+  "description": "This repository contains a collection of drivers designed to to work with the hardware at SEP4 at Software Technology Engineering at VIA. All drivers are located in the lib/drivers directory.",
+  "main": "index.js",
+  "directories": {
+    "doc": "doc",
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SEP4-Greenhouse/Greenhouse-IOT.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SEP4-Greenhouse/Greenhouse-IOT/issues"
+  },
+  "homepage": "https://github.com/SEP4-Greenhouse/Greenhouse-IOT#readme",
+  "dependencies": {
+    "body-parser": "^2.2.0",
+    "express": "^5.1.0",
+    "swagger-ui-express": "^5.0.1"
+  }
+}
