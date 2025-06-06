@@ -146,6 +146,7 @@ void handle_command(const char *cmd) {
         snprintf(buf, sizeof(buf), "Proximity: %d cm\n", distance);
         uart_send_string_blocking(USART_0, buf);
 
+        // Check if an object has moved close to the sensor
     } else if (strcmp(cmd, "READ_PIR") == 0) {
         bool motion = control_pir_detected();
         uart_send_string_blocking(USART_0, motion ? "Motion detected\n" : "No motion\n");
@@ -159,7 +160,6 @@ void handle_command(const char *cmd) {
         }
     }
 }
-
 
 int main(void) {
     uart_init(USART_0, 9600, console_rx);
@@ -253,7 +253,8 @@ int main(void) {
             } else {
                 uart_send_string_blocking(USART_0, "DHT11 Read FAIL\n");
             }
-
+            
+            // Calculate distance from proximity sensor
             uint16_t distance = control_proximity_get_distance_cm();
             char dist_msg[40];
             snprintf(dist_msg, sizeof(dist_msg), "[PROXIMITY] Distance: %u cm\n", distance);
