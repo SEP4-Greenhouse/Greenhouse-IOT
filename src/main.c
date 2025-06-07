@@ -3,6 +3,8 @@
 #include <string.h>
 #include <stdbool.h>
 
+
+// Include headers for various device drivers and controllers
 #include "wifi.h"
 #include "uart.h"
 #include "leds_controller.h"
@@ -19,25 +21,40 @@
 #include <avr/interrupt.h>
 #endif
 
+
+// Constants for buffer sizes and timing intervals
 #define MAX_STRING_LENGTH 100
 #define READ_INTERVAL_MS 15000
 #define LOOP_DELAY_MS 10
 
+
+// UART input buffer
 static uint8_t uart_buffer[MAX_STRING_LENGTH] = {0};
 static uint8_t uart_index = 0;
 static volatile bool uart_done = false;
 
+// Initial values shown on the display before actual reading data is displayed
 static int last_valid_display = 234;
 
+// MQTT receive buffer and status flag
 static char mqtt_rx_buffer[256] = {0};
 static bool mqtt_response_received = false;
 
+
+/**
+ * @brief Callback when MQTT message is received
+ * Adds newline and prints it to UART for logging.
+ */
 void mqtt_rx(void) {
     size_t len = strlen(mqtt_rx_buffer);
     mqtt_rx_buffer[len] = '\r';
     mqtt_rx_buffer[len + 1] = '\n';
     mqtt_rx_buffer[len + 2] = '\0';
 
+
+    /**
+    * @brief Generates a fake ISO-8601 timestamp for MQTT messages
+    */
     uart_send_string_blocking(USART_0, "[MQTT RX] Response:\n");
     uart_send_string_blocking(USART_0, mqtt_rx_buffer);
     mqtt_response_received = true;
@@ -59,6 +76,9 @@ char* get_fake_timestamp(void) {
     return buffer;
 }
 
+    /**
+     * @brief Utility to strip newline characters from command strings
+     */
 void strip_newline(char *str) {
     for (size_t i = 0; str[i]; i++) {
         if (str[i] == '\r' || str[i] == '\n') {
@@ -67,7 +87,9 @@ void strip_newline(char *str) {
         }
     }
 }
-
+    /**
+     * @brief UART receive handler for command input
+     */
 void console_rx(uint8_t byte) {
     uart_send_blocking(USART_0, byte);
     if (byte != '\r' && byte != '\n') {
@@ -88,6 +110,9 @@ void handle_command(const char *cmd) {
     uart_send_string_blocking(USART_0, cmd);
     uart_send_blocking(USART_0, '\n');
 
+
+
+    // Handling the LED and display commands
     if (strcmp(cmd, "BUTTON1") == 0) {
         control_led_on(1);
         control_display_set_number(1);
@@ -114,6 +139,9 @@ void handle_command(const char *cmd) {
     } else if (strcmp(cmd, "DISPLAY_RESET") == 0) {
         control_display_set_number(0);
 
+
+
+    // Sensor read commands
     } else if (strcmp(cmd, "READ_DHT11") == 0) {
         uint8_t hum_int, hum_dec, temp_int, temp_dec;
         if (dht11_get(&hum_int, &hum_dec, &temp_int, &temp_dec) == DHT11_OK) {
@@ -150,25 +178,27 @@ void handle_command(const char *cmd) {
     }
 }
 
-
+/**
+ * @brief Application entry point — system setup and main control loop
+ */
 int main(void) {
     uart_init(USART_0, 9600, console_rx);
     wifi_init();
     dht11_init();
-    _delay_ms(2000);
+    _delay_ms(2000);  // Letting sensors settle and read
     control_moisture_init();
     control_pir_init();
     control_proximity_init();
 
 #ifdef __AVR__
-    sei();
+    sei();   // Enable global interrupts
 #endif
 
     uart_send_string_blocking(USART_0, "Welcome from SEP4 IoT hardware!\n");
     wifi_command_join_AP("ONEPLUS", "00000000");
     uart_send_string_blocking(USART_0, "Wi-Fi Connected\n");
 
-    // MQTT TCP connection with callback
+    // MQTT onnection to broker
     wifi_command_create_TCP_connection("broker.hivemq.com", 1883, mqtt_rx, (uint8_t*)mqtt_rx_buffer);
     uart_send_string_blocking(USART_0, "TCP Connected to MQTT Broker\n");
 
@@ -181,6 +211,7 @@ int main(void) {
 
     uart_send_string_blocking(USART_0, "Type text to send: ");
 
+    // Initialization of actuators and display
     control_leds_init();
     control_display_init();
     control_waterpump_init();
@@ -190,6 +221,7 @@ int main(void) {
     const uint32_t loop_threshold = READ_INTERVAL_MS / LOOP_DELAY_MS;
 
     while (1) {
+        // Handle UART input and commands
         if (uart_done) {
             mqtt_publish("greenhouse/sensor/temp", (char *)uart_buffer);
             handle_command((char *)uart_buffer);
@@ -198,6 +230,8 @@ int main(void) {
             uart_send_string_blocking(USART_0, "Type text to send: ");
         }
 
+
+        // Periodic sensor data read and MQTT publish
         if (++loop_counter >= loop_threshold) {
             loop_counter = 0;
             _delay_ms(100);
@@ -215,6 +249,8 @@ int main(void) {
             }
 
             if (success) {
+
+                // Update display and publish to MQTT
                 last_valid_display = temp_int * 10 + (temp_dec % 10);
                 control_display_set_number(last_valid_display);
 
@@ -240,6 +276,7 @@ int main(void) {
                 uart_send_string_blocking(USART_0, "DHT11 Read FAIL\n");
             }
 
+            // Read and report proximity
             uint16_t distance = control_proximity_get_distance_cm();
             char dist_msg[40];
             snprintf(dist_msg, sizeof(dist_msg), "[PROXIMITY] Distance: %u cm\n", distance);
@@ -250,7 +287,7 @@ int main(void) {
             }
         }
 
-        _delay_ms(LOOP_DELAY_MS);
+        _delay_ms(LOOP_DELAY_MS);  // Adding delay for the loop to avoid sensor reading delays which are built in
     }
 
     return 0;
