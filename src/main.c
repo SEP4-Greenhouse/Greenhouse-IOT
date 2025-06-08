@@ -78,7 +78,7 @@ void send_http_post(const char* json_payload) {
              path, host, bearer_token, (int)strlen(json_payload), json_payload);
 
     wifi_command_TCP_transmit((uint8_t*)http_request, strlen(http_request));
-    uart_send_string_blocking(USART_0, "HTTP POST sent to API\n");
+    uart_send_string_blocking(USART_0, "\n"); //HTTP POST sent to API
     uart_send_string_blocking(USART_0, json_payload);
     uart_send_blocking(USART_0, '\n');
 }
@@ -215,19 +215,19 @@ int main(void) {
 
                 char payload[256];
                 snprintf(payload, sizeof(payload),
-                         "{ \"timeStamp\": \"%s\", \"value\": %d, \"unit\": \"\u00b0C\", \"sensorId\": 1 }",
+                         "{ \"timeStamp\": \"%s\", \"value\": %d, \"unit\": \"deg C\", \"sensorId\": 1 }",
                          timestamp, temp_int);
                 send_http_post(payload);
 
                 snprintf(payload, sizeof(payload),
-                         "{ \"timeStamp\": \"%s\", \"value\": %d, \"unit\": \"%%\", \"sensorId\": 2 }",
+                         "{ \"timeStamp\": \"%s\", \"value\": %d, \"unit\": \"deg C\", \"sensorId\": 2 }",
                          timestamp, hum_int);
                 send_http_post(payload);
 
-                uint16_t moisture_raw = control_moisture_get_raw_value();
+               // uint16_t moisture_raw = control_moisture_get_raw_value();
                 uint8_t moisture_percent = control_moisture_get_percent();
                 snprintf(payload, sizeof(payload),
-                         "{ \"timeStamp\": \"%s\", \"value\": %d, \"unit\": \"%%\", \"sensorId\": 3 }",
+                         "{ \"timeStamp\": \"%s\", \"value\": %d, \"unit\": \"deg C\", \"sensorId\": 3 }",
                          timestamp, moisture_percent);
                 send_http_post(payload);
             } else {

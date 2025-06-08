@@ -37,16 +37,10 @@ volatile uint8_t pump_running = 0;    // 1 = running, 0 = stopped
 
 
 
-
-
-
 // Temporary stub to fix undefined reference error
 void send_pump_status(const char* topic, const char* message) {
     // Do nothing (or print to console if needed)
 }
-
-
-
 
 
 /**
