@@ -1,14 +1,41 @@
-#pragma once
-#include <stdint.h>
+// This mock file is a hardware abstraction shim for unit testing C code that normally runs on an AVR microcontroller (like an ATmega2560). It fakes the presence of all AVR registers and constants so that embedded firmware can be compiled and tested in a regular development environment (e.g., on a PC), without actual hardware.
 
-void cli(void);
-void sei(void );
-#define PB7 7
-#define F_CPU 16000000L
-#define TXEN0 3
-#define RXEN0 4
-#define RXCIE0 7
+//🧠 Purpose
+// Allow Compilation Outside of AVR
 
+// Real AVR code includes hardware registers like UCSR0A, PORTB, etc., which exist only on the microcontroller.
+
+// This file declares all those symbols as extern variables or macros, letting the test suite compile without needing the real AVR headers.
+
+// Support Unit Testing
+
+// During tests, the variables like PORTB can be set or read like regular global variables.
+
+// This lets you simulate digital I/O behavior in your test cases.
+
+// By mocking low-level hardware definitions, you don’t need to link avr/io.h, avr/interrupt.h, etc., which are incompatible with native test environments (e.g., using gcc on Linux/Windows).
+
+#pragma once      // Prevent multiple inclusions of this header
+#include <stdint.h>   // Standard fixed-width integer types (e.g., uint8_t, uint16_t)
+
+void cli(void);        // Clear interrupt flag (disable interrupts)
+void sei(void );     // Set interrupt flag (enable interrupts)
+
+
+// ---------------------- Clock and Port Bit Definitions ------------------------ 
+ 
+#define PB7 7      // Port B, Pin 7
+#define F_CPU 16000000L    // CPU frequency in Hz (16 MHz)
+
+// ---------------------- UART Register Bit Masks -------------------------------
+// USART0 control bits
+
+#define TXEN0 3       // Transmitter Enable bit
+#define RXEN0 4       // Receiver Enable bit
+#define RXCIE0 7      // RX Complete Interrupt Enable bit
+
+
+// Data Direction Register bits (for digital I/O)
 #define DDA6 6
 #define DDA4 4
 #define DDC7 7
@@ -17,6 +44,7 @@ void sei(void );
 
 #define PD7 7
 
+// USART1, 2, 3 similar control bits
 #define TXEN1 3
 #define RXEN1 4
 #define RXCIE1 7
@@ -30,43 +58,56 @@ void sei(void );
 #define RXEN3 4
 #define RXCIE3 7
 
+// ---------------------- Character Size Settings -------------------------------
 #define UCSZ00 1
 #define UCSZ01 2
-extern uint8_t UCSR0C;
+extern uint8_t UCSR0C;  // USART0 Control and Status Register C
 
 #define UCSZ10 1
 #define UCSZ11 2
-extern uint8_t UCSR1C;
+extern uint8_t UCSR1C;   // USART1 Control Register C
 
 #define UCSZ20 1
 #define UCSZ21 2
-extern uint8_t UCSR2C;
+extern uint8_t UCSR2C;     // USART2
 
 #define UCSZ30 1
 #define UCSZ31 2
 #define PD1 1
 
-extern uint8_t UCSR3C;
+extern uint8_t UCSR3C;   // USART3
 
-extern uint8_t UCSR1B; 
+
+// ---------------------- UART Data Registers & Flags ---------------------------
+
+extern uint8_t UCSR1B;   // Control registers B for all USARTs
 #define UDRIE1 5
-extern uint8_t UCSR2B; 
+extern uint8_t UCSR2B;   // USART Data Register Empty Interrupt Enable
 #define UDRIE2 5
 extern uint8_t UCSR3B; 
 #define UDRIE3 5
 extern uint8_t UCSR0B; 
 #define UDRIE0 5
-extern uint8_t UCSR0A;
+
+
+extern uint8_t UCSR0A;    // Status registers
 extern uint8_t UCSR1A;
 extern uint8_t UCSR2A;
 extern uint8_t UCSR3A;
 
-#define UDRE0 5
+#define UDRE0 5          // USART Data Register Empty flags
 #define UDRE1 5
 #define UDRE2 5
 #define UDRE3 5
+
+
+// ---------------------- Delay Functions (Mocked) ------------------------------
+
 void _delay_ms(int a);
 void _delay_us(int a);
+
+// ---------------------- GPIO Data Direction and Port Registers ----------------
+
 extern uint8_t DDRB;
 extern uint8_t PORTB;
 
